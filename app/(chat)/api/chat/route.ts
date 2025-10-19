@@ -1,60 +1,95 @@
+import { geolocation } from "@vercel/functions";
 import {
-  appendClientMessage,
-  appendResponseMessages,
-  createDataStream,
+  convertToModelMessages,
+  createUIMessageStream,
+  JsonToSseTransformStream,
   smoothStream,
+  stepCountIs,
   streamText,
-} from 'ai';
-import { auth, type UserType } from '@/app/(auth)/auth';
-import { type RequestHints, systemPrompt } from '@/lib/ai/prompts';
+} from "ai";
+import { unstable_cache as cache } from "next/cache";
+import { after } from "next/server";
+import {
+  createResumableStreamContext,
+  type ResumableStreamContext,
+} from "resumable-stream";
+// tokenlens subpath exports can sometimes not be resolvable in certain
+// environments (or the package layout may differ). Import these at
+// runtime to avoid build-time module resolution errors. Use a loose
+// `any` type for the catalog so missing types don't break the bundle.
+type ModelCatalog = any;
+import { auth, type UserType } from "@/app/(auth)/auth";
+import type { VisibilityType } from "@/components/visibility-selector";
+import { entitlementsByUserType } from "@/lib/ai/entitlements";
+import type { ChatModel } from "@/lib/ai/models";
+import { type RequestHints, systemPrompt } from "@/lib/ai/prompts";
+import { myProvider } from "@/lib/ai/providers";
+import { createDocument } from "@/lib/ai/tools/create-document";
+import { getWeather } from "@/lib/ai/tools/get-weather";
+import { requestSuggestions } from "@/lib/ai/tools/request-suggestions";
+import { updateDocument } from "@/lib/ai/tools/update-document";
+import { isProductionEnvironment } from "@/lib/constants";
 import {
   createStreamId,
   deleteChatById,
   getChatById,
   getMessageCountByUserId,
   getMessagesByChatId,
-  getStreamIdsByChatId,
   saveChat,
   saveMessages,
-} from '@/lib/db/queries';
-import { generateUUID, getTrailingMessageId } from '@/lib/utils';
-import { generateTitleFromUserMessage } from '../../actions';
-import { createDocument } from '@/lib/ai/tools/create-document';
-import { updateDocument } from '@/lib/ai/tools/update-document';
-import { requestSuggestions } from '@/lib/ai/tools/request-suggestions';
-import { getWeather } from '@/lib/ai/tools/get-weather';
-import { tavilySearch } from '@/lib/ai/tools/tavily-search';
-import { isProductionEnvironment } from '@/lib/constants';
-import { myProvider } from '@/lib/ai/providers';
-import { entitlementsByUserType } from '@/lib/ai/entitlements';
-import { postRequestBodySchema, type PostRequestBody } from './schema';
-import { geolocation } from '@vercel/functions';
-import {
-  createResumableStreamContext,
-  type ResumableStreamContext,
-} from 'resumable-stream';
-import { after } from 'next/server';
-import type { Chat } from '@/lib/db/schema';
-import { differenceInSeconds } from 'date-fns';
-import { ChatSDKError } from '@/lib/errors';
+  updateChatLastContextById,
+} from "@/lib/db/queries";
+import { ChatSDKError } from "@/lib/errors";
+import type { ChatMessage } from "@/lib/types";
+import type { AppUsage } from "@/lib/usage";
+import { convertToUIMessages, generateUUID } from "@/lib/utils";
+import { generateTitleFromUserMessage } from "../../actions";
+import { type PostRequestBody, postRequestBodySchema } from "./schema";
 
 export const maxDuration = 60;
 
 let globalStreamContext: ResumableStreamContext | null = null;
 
-function getStreamContext() {
+const getTokenlensCatalog = cache(
+  async (): Promise<ModelCatalog | undefined> => {
+    try {
+      // Dynamically import tokenlens at runtime. Some environments (or
+      // certain package layouts) may not allow static subpath imports at
+      // build time, which causes the whole server build to fail. By
+      // importing at runtime we keep the code resilient and can fallback
+      // if tokenlens is not available.
+  // @ts-ignore: runtime import - tokenlens subpath may not be resolvable at build time
+  const mod = await import("tokenlens/fetch");
+      if (mod?.fetchModels) {
+        return await mod.fetchModels();
+      }
+      console.warn("TokenLens: fetchModels not found on runtime import");
+      return;
+    } catch (err) {
+      console.warn(
+        "TokenLens: catalog fetch failed, using default catalog",
+        err
+      );
+      return; // tokenlens helpers will fall back to defaultCatalog
+    }
+  },
+  ["tokenlens-catalog"],
+  { revalidate: 24 * 60 * 60 } // 24 hours
+);
+
+export function getStreamContext() {
   if (!globalStreamContext) {
     try {
       globalStreamContext = createResumableStreamContext({
         waitUntil: after,
       });
     } catch (error: any) {
-      if (error.message.includes('REDIS_URL')) {
+      if (error.message.includes("REDIS_URL")) {
         console.log(
-          ' > Resumable streams are disabled due to missing REDIS_URL',
+          " > Resumable streams are disabled due to missing REDIS_URL"
         );
       } else {
-        console.error('Error initializing stream context:', error);
+        console.error(error);
       }
     }
   }
@@ -66,59 +101,29 @@ export async function POST(request: Request) {
   let requestBody: PostRequestBody;
 
   try {
-    // Handle large request bodies
-    const requestBodyText = await request.text();
-
-    if (requestBodyText.length > 50 * 1024 * 1024) { // 50MB limit
-      console.warn('Request body size:', requestBodyText.length, 'bytes');
-    }
-
-    requestBody = postRequestBodySchema.parse(JSON.parse(requestBodyText));
-  } catch (error) {
-    console.error('Error parsing request body:', error);
-
-    // Enhanced error handling for large inputs
-    if (error instanceof SyntaxError) {
-      return new Response(
-        JSON.stringify({
-          error: 'Invalid JSON format in request',
-          code: 'invalid_json',
-        }),
-        {
-          status: 400,
-          headers: {
-            'Content-Type': 'application/json',
-          },
-        },
-      );
-    }
-
-    if (error instanceof Error && error.message.includes('PayloadTooLarge')) {
-      return new Response(
-        JSON.stringify({
-          error: 'Request too large. Please try with smaller input.',
-          code: 'payload_too_large',
-        }),
-        {
-          status: 413,
-          headers: {
-            'Content-Type': 'application/json',
-          },
-        },
-      );
-    }
-
-    return new ChatSDKError('bad_request:api').toResponse();
+    const json = await request.json();
+    requestBody = postRequestBodySchema.parse(json);
+  } catch (_) {
+    return new ChatSDKError("bad_request:api").toResponse();
   }
 
   try {
-    const { id, message, selectedChatModel, selectedVisibilityType } =
-      requestBody;
+    const {
+      id,
+      message,
+      selectedChatModel,
+      selectedVisibilityType,
+    }: {
+      id: string;
+      message: ChatMessage;
+      selectedChatModel: ChatModel["id"];
+      selectedVisibilityType: VisibilityType;
+    } = requestBody;
 
     const session = await auth();
 
     if (!session?.user) {
-      return new ChatSDKError('unauthorized:chat').toResponse();
+      return new ChatSDKError("unauthorized:chat").toResponse();
     }
 
     const userType: UserType = session.user.type;
@@ -129,12 +134,16 @@ export async function POST(request: Request) {
     });
 
     if (messageCount > entitlementsByUserType[userType].maxMessagesPerDay) {
-      return new ChatSDKError('rate_limit:chat').toResponse();
+      return new ChatSDKError("rate_limit:chat").toResponse();
     }
 
     const chat = await getChatById({ id });
 
-    if (!chat) {
+    if (chat) {
+      if (chat.userId !== session.user.id) {
+        return new ChatSDKError("forbidden:chat").toResponse();
+      }
+    } else {
       const title = await generateTitleFromUserMessage({
         message,
       });
@@ -145,19 +154,10 @@ export async function POST(request: Request) {
         title,
         visibility: selectedVisibilityType,
       });
-    } else {
-      if (chat.userId !== session.user.id) {
-        return new ChatSDKError('forbidden:chat').toResponse();
-      }
     }
 
-    const previousMessages = await getMessagesByChatId({ id });
-
-    const messages = appendClientMessage({
-      // @ts-expect-error: todo add type conversion from DBMessage[] to UIMessage[]
-      messages: previousMessages,
-      message,
-    });
+    const messagesFromDb = await getMessagesByChatId({ id });
+    const uiMessages = [...convertToUIMessages(messagesFromDb), message];
 
     const { longitude, latitude, city, country } = geolocation(request);
 
@@ -173,9 +173,9 @@ export async function POST(request: Request) {
         {
           chatId: id,
           id: message.id,
-          role: 'user',
+          role: "user",
           parts: message.parts,
-          attachments: message.experimental_attachments ?? [],
+          attachments: [],
           createdAt: new Date(),
         },
       ],
@@ -184,27 +184,25 @@ export async function POST(request: Request) {
     const streamId = generateUUID();
     await createStreamId({ streamId, chatId: id });
 
-    const stream = createDataStream({
-      execute: (dataStream) => {
+    let finalMergedUsage: AppUsage | undefined;
+
+    const stream = createUIMessageStream({
+      execute: ({ writer: dataStream }) => {
         const result = streamText({
           model: myProvider.languageModel(selectedChatModel),
           system: systemPrompt({ selectedChatModel, requestHints }),
-          messages,
-          maxSteps: 10, // Increased for complex queries
+          messages: convertToModelMessages(uiMessages),
+          stopWhen: stepCountIs(5),
           experimental_activeTools:
-            selectedChatModel === 'chat-model-reasoning' || selectedChatModel === 'chat-model' || selectedChatModel === 'chat-model1' || selectedChatModel === 'chat-model3'
-              ? [tavilySearch.toolSpec]
+            selectedChatModel === "chat-model-reasoning"
+              ? []
               : [
-                  'createDocument',
-                  'updateDocument',
-                  'requestSuggestions',
-                  tavilySearch.toolSpec,
+                  "getWeather",
+                  "createDocument",
+                  "updateDocument",
+                  "requestSuggestions",
                 ],
-          experimental_transform: smoothStream({
-            chunking: 'word',
-            delayInMs: 5, // Faster streaming for better UX
-          }),
-          experimental_generateMessageId: generateUUID,
+          experimental_transform: smoothStream({ chunking: "word" }),
           tools: {
             getWeather,
             createDocument: createDocument({ session, dataStream }),
@@ -213,206 +211,149 @@ export async function POST(request: Request) {
               session,
               dataStream,
             }),
-            tavilySearch: tavilySearch({ session, dataStream }),
-          },
-          onFinish: async ({ response }) => {
-            if (session.user?.id) {
-              try {
-                const assistantId = getTrailingMessageId({
-                  messages: response.messages.filter(
-                    (message) => message.role === 'assistant',
-                  ),
-                });
-
-                if (!assistantId) {
-                  throw new Error('No assistant message found!');
-                }
-
-                const [, assistantMessage] = appendResponseMessages({
-                  messages: [message],
-                  responseMessages: response.messages,
-                });
-
-                await saveMessages({
-                  messages: [
-                    {
-                      id: assistantId,
-                      chatId: id,
-                      role: assistantMessage.role,
-                      parts: assistantMessage.parts,
-                      attachments:
-                        assistantMessage.experimental_attachments ?? [],
-                      createdAt: new Date(),
-                    },
-                  ],
-                });
-              } catch (error) {
-                console.error('Failed to save chat:', error);
-              }
-            }
           },
           experimental_telemetry: {
             isEnabled: isProductionEnvironment,
-            functionId: 'stream-text',
+            functionId: "stream-text",
+          },
+          onFinish: async ({ usage }) => {
+            try {
+              const providers = await getTokenlensCatalog();
+              const modelId =
+                myProvider.languageModel(selectedChatModel).modelId;
+              if (!modelId) {
+                finalMergedUsage = usage;
+                dataStream.write({
+                  type: "data-usage",
+                  data: finalMergedUsage,
+                });
+                return;
+              }
+
+              if (!providers) {
+                finalMergedUsage = usage;
+                dataStream.write({
+                  type: "data-usage",
+                  data: finalMergedUsage,
+                });
+                return;
+              }
+
+              try {
+                // @ts-ignore: runtime import - tokenlens subpath may not be resolvable at build time
+                const helpers = await import("tokenlens/helpers");
+                if (helpers?.getUsage) {
+                  const summary = helpers.getUsage({ modelId, usage, providers });
+                  finalMergedUsage = { ...usage, ...summary, modelId } as AppUsage;
+                } else {
+                  console.warn("TokenLens: getUsage not found on runtime import");
+                  finalMergedUsage = usage;
+                }
+              } catch (err) {
+                console.warn("TokenLens: getUsage import failed", err);
+                finalMergedUsage = usage;
+              }
+
+              dataStream.write({ type: "data-usage", data: finalMergedUsage });
+            } catch (err) {
+              console.warn("TokenLens enrichment failed", err);
+              finalMergedUsage = usage;
+              dataStream.write({ type: "data-usage", data: finalMergedUsage });
+            }
           },
         });
 
         result.consumeStream();
 
-        result.mergeIntoDataStream(dataStream, {
-          sendReasoning: true, // Ensures reasoning streams incrementally
-        });
+        dataStream.merge(
+          result.toUIMessageStream({
+            sendReasoning: true,
+          })
+        );
       },
-      onError: (error) => {
-        console.error('Stream error:', error);
-        return 'Oops, an error occurred!';
+      generateId: generateUUID,
+      onFinish: async ({ messages }) => {
+        await saveMessages({
+          messages: messages.map((currentMessage) => ({
+            id: currentMessage.id,
+            role: currentMessage.role,
+            parts: currentMessage.parts,
+            createdAt: new Date(),
+            attachments: [],
+            chatId: id,
+          })),
+        });
+
+        if (finalMergedUsage) {
+          try {
+            await updateChatLastContextById({
+              chatId: id,
+              context: finalMergedUsage,
+            });
+          } catch (err) {
+            console.warn("Unable to persist last usage for chat", id, err);
+          }
+        }
+      },
+      onError: () => {
+        return "Oops, an error occurred!";
       },
     });
 
-    const streamContext = getStreamContext();
+    // const streamContext = getStreamContext();
 
-    if (streamContext) {
-      return new Response(
-        await streamContext.resumableStream(streamId, () => stream),
-      );
-    } else {
-      return new Response(stream);
-    }
+    // if (streamContext) {
+    //   return new Response(
+    //     await streamContext.resumableStream(streamId, () =>
+    //       stream.pipeThrough(new JsonToSseTransformStream())
+    //     )
+    //   );
+    // }
+
+    return new Response(stream.pipeThrough(new JsonToSseTransformStream()));
   } catch (error) {
+    const vercelId = request.headers.get("x-vercel-id");
+
     if (error instanceof ChatSDKError) {
       return error.toResponse();
     }
-    console.error('POST error:', error);
 
-    return new Response(
-      JSON.stringify({
-        error: 'Failed to process chat request. Your input has been processed successfully.',
-        code: 'processing_error',
-        details: process.env.NODE_ENV === 'development' ? error.message : undefined,
-      }),
-      {
-        status: 500,
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      },
-    );
-  }
-}
-
-export async function GET(request: Request) {
-  const streamContext = getStreamContext();
-  const resumeRequestedAt = new Date();
-
-  if (!streamContext) {
-    return new Response(null, { status: 204 });
-  }
-
-  const { searchParams } = new URL(request.url);
-  const chatId = searchParams.get('chatId');
-
-  if (!chatId) {
-    return new ChatSDKError('bad_request:api').toResponse();
-  }
-
-  const session = await auth();
-
-  if (!session?.user) {
-    return new ChatSDKError('unauthorized:chat').toResponse();
-  }
-
-  let chat: Chat;
-
-  try {
-    chat = await getChatById({ id: chatId });
-  } catch {
-    return new ChatSDKError('not_found:chat').toResponse();
-  }
-
-  if (!chat) {
-    return new ChatSDKError('not_found:chat').toResponse();
-  }
-
-  if (chat.visibility === 'private' && chat.userId !== session.user.id) {
-    return new ChatSDKError('forbidden:chat').toResponse();
-  }
-
-  const streamIds = await getStreamIdsByChatId({ chatId });
-
-  if (!streamIds.length) {
-    return new ChatSDKError('not_found:stream').toResponse();
-  }
-
-  const recentStreamId = streamIds.at(-1);
-
-  if (!recentStreamId) {
-    return new ChatSDKError('not_found:stream').toResponse();
-  }
-
-  const emptyDataStream = createDataStream({
-    execute: () => {},
-  });
-
-  const stream = await streamContext.resumableStream(
-    recentStreamId,
-    () => emptyDataStream,
-  );
-
-  /*
-   * For when the generation is streaming during SSR
-   * but the resumable stream has concluded at this point.
-   */
-  if (!stream) {
-    const messages = await getMessagesByChatId({ id: chatId });
-    const mostRecentMessage = messages.at(-1);
-
-    if (!mostRecentMessage) {
-      return new Response(emptyDataStream, { status: 200 });
+    // Check for Vercel AI Gateway credit card error
+    if (
+      error instanceof Error &&
+      error.message?.includes(
+        "AI Gateway requires a valid credit card on file to service requests"
+      )
+    ) {
+      // Map this condition to a generic bad_request api error. We avoid
+      // introducing a custom error code that's not part of the allowed
+      // ErrorCode union in `lib/errors.ts`.
+      return new ChatSDKError("bad_request:api").toResponse();
     }
 
-    if (mostRecentMessage.role !== 'assistant') {
-      return new Response(emptyDataStream, { status: 200 });
-    }
-
-    const messageCreatedAt = new Date(mostRecentMessage.createdAt);
-
-    if (differenceInSeconds(resumeRequestedAt, messageCreatedAt) > 15) {
-      return new Response(emptyDataStream, { status: 200 });
-    }
-
-    const restoredStream = createDataStream({
-      execute: (buffer) => {
-        buffer.writeData({
-          type: 'append-message',
-          message: JSON.stringify(mostRecentMessage),
-        });
-      },
-    });
-
-    return new Response(restoredStream, { status: 200 });
+    console.error("Unhandled error in chat API:", error, { vercelId });
+    return new ChatSDKError("offline:chat").toResponse();
   }
-
-  return new Response(stream, { status: 200 });
 }
 
 export async function DELETE(request: Request) {
   const { searchParams } = new URL(request.url);
-  const id = searchParams.get('id');
+  const id = searchParams.get("id");
 
   if (!id) {
-    return new ChatSDKError('bad_request:api').toResponse();
+    return new ChatSDKError("bad_request:api").toResponse();
   }
 
   const session = await auth();
 
   if (!session?.user) {
-    return new ChatSDKError('unauthorized:chat').toResponse();
+    return new ChatSDKError("unauthorized:chat").toResponse();
   }
 
   const chat = await getChatById({ id });
 
-  if (chat.userId !== session.user.id) {
-    return new ChatSDKError('forbidden:chat').toResponse();
+  if (chat?.userId !== session.user.id) {
+    return new ChatSDKError("forbidden:chat").toResponse();
   }
 
   const deletedChat = await deleteChatById({ id });
