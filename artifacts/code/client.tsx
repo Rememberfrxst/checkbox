@@ -81,9 +81,8 @@ export const codeArtifact = new Artifact<'code', Metadata>({
         ...draftArtifact,
         content: streamPart.data,
         isVisible:
-          draftArtifact.status === 'streaming' &&
-          draftArtifact.content.length > 300 &&
-          draftArtifact.content.length < 310
+          // Auto-open artifact for any code > 50 chars (like ChatGPT/Grok/Claude)
+          streamPart.data.length > 50
             ? true
             : draftArtifact.isVisible,
         status: 'streaming',
@@ -92,23 +91,25 @@ export const codeArtifact = new Artifact<'code', Metadata>({
   },
   content: ({ metadata, setMetadata, ...props }) => {
     return (
-      <>
-        <div className="px-1">
+      <div className="h-full flex flex-col overflow-hidden">
+        <div className="flex-1 overflow-hidden">
           <CodeEditor {...props} />
         </div>
 
         {metadata?.outputs && (
-          <Console
-            consoleOutputs={metadata.outputs}
-            setConsoleOutputs={() => {
-              setMetadata({
-                ...metadata,
-                outputs: [],
-              });
-            }}
-          />
+          <div className="shrink-0 max-h-[300px] overflow-y-auto border-t border-[#404040]">
+            <Console
+              consoleOutputs={metadata.outputs}
+              setConsoleOutputs={() => {
+                setMetadata({
+                  ...metadata,
+                  outputs: [],
+                });
+              }}
+            />
+          </div>
         )}
-      </>
+      </div>
     );
   },
   actions: [
@@ -247,32 +248,65 @@ export const codeArtifact = new Artifact<'code', Metadata>({
   ],
   toolbar: [
     {
-      icon: <MessageIcon />,
-      description: 'Add comments',
-      onClick: ({ sendMessage }) => {
-        sendMessage({
+      icon: <CopyIcon />,
+      description: 'Copy code',
+      onClick: ({ appendMessage }) => {
+        // Get the current artifact content and copy to clipboard
+        const content = document.querySelector('.monaco-editor')?.textContent || '';
+        navigator.clipboard.writeText(content).then(() => {
+          toast.success('Code copied to clipboard');
+        }).catch(() => {
+          toast.error('Failed to copy code');
+        });
+      },
+    },
+    {
+      icon: <PlayIcon />,
+      description: 'Run code',
+      onClick: ({ appendMessage }) => {
+        appendMessage({
           role: 'user',
-          parts: [
-            {
-              type: 'text',
-              text: 'Add comments to the code snippet for understanding',
-            },
-          ],
+          content: 'Please run this code and show the output.',
+        });
+      },
+    },
+    {
+      icon: <MessageIcon />,
+      description: 'Explain code',
+      onClick: ({ appendMessage }) => {
+        appendMessage({
+          role: 'user',
+          content: 'Can you explain this code step by step and how it works?',
+        });
+      },
+    },
+    {
+      icon: <UndoIcon />,
+      description: 'Debug & Fix',
+      onClick: ({ appendMessage }) => {
+        appendMessage({
+          role: 'user',
+          content: 'Please debug this code, find any issues, and fix them with explanations.',
+        });
+      },
+    },
+    {
+      icon: <RedoIcon />,
+      description: 'Optimize',
+      onClick: ({ appendMessage }) => {
+        appendMessage({
+          role: 'user',
+          content: 'Please optimize this code for better performance and explain the improvements.',
         });
       },
     },
     {
       icon: <LogsIcon />,
-      description: 'Add logs',
-      onClick: ({ sendMessage }) => {
-        sendMessage({
+      description: 'Add Comments',
+      onClick: ({ appendMessage }) => {
+        appendMessage({
           role: 'user',
-          parts: [
-            {
-              type: 'text',
-              text: 'Add logs to the code snippet for debugging',
-            },
-          ],
+          content: 'Please add detailed comments to this code explaining each part.',
         });
       },
     },
