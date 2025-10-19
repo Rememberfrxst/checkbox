@@ -51,6 +51,16 @@ export function ModelSelector({
   const [open, setOpen] = useState(false)
   const [optimisticModelId, setOptimisticModelId] = useOptimistic(selectedModelId)
 
+  // Load from localStorage on mount for instant experience
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const savedModel = localStorage.getItem('selectedModel')
+      if (savedModel && savedModel !== selectedModelId) {
+        setOptimisticModelId(savedModel)
+      }
+    }
+  }, [])
+
   const isMobile = useMediaQuery("(max-width: 767px)")
 
   // ✅ Show all models without entitlement restriction
@@ -58,23 +68,66 @@ export function ModelSelector({
 
   const selectedChatModel = useMemo(() => {
     // If in thinking mode, show the original selected model in UI
-    const isThinkingMode = sessionStorage.getItem('thinkingMode') === 'true';
-    const displayModelId = isThinkingMode 
-      ? (sessionStorage.getItem('previousModel') || optimisticModelId)
-      : optimisticModelId;
-    
+    let isThinkingMode = false;
+    let displayModelId = optimisticModelId;
+
+    if (typeof window !== 'undefined' && typeof sessionStorage !== 'undefined') {
+      try {
+        isThinkingMode = sessionStorage.getItem('thinkingMode') === 'true';
+        displayModelId = isThinkingMode
+          ? (sessionStorage.getItem('previousModel') || optimisticModelId)
+          : optimisticModelId;
+      } catch (e) {
+        // In rare restricted environments sessionStorage may throw. Fail safe to optimisticModelId.
+        console.warn('sessionStorage read failed in ModelSelector:', e);
+        displayModelId = optimisticModelId;
+      }
+    }
+
     return availableChatModels.find((chatModel) => chatModel.id === displayModelId) || null;
   }, [optimisticModelId, availableChatModels])
 
-  const handleModelSelect = (modelId: string) => {
-    setOpen(false)
-    startTransition(() => {
-      setOptimisticModelId(modelId)
-      saveChatModelAsCookie(modelId)
+  const handleModelSelect = async (modelId: string) => {
+    try {
+      // Start preloading the model immediately
+      fetch('/api/preload-model', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ modelId }),
+      }).catch(() => {}); // Fire and forget
+
+      // Immediate UI feedback with loading state
+      startTransition(() => {
+        setOptimisticModelId(modelId);
+        setOpen(false);
+      });
+
+      // Parallel state updates for instant feedback
+      await Promise.all([
+        // Local storage update
+        new Promise<void>((resolve) => {
+          if (typeof window !== 'undefined') {
+            localStorage.setItem('selectedModel', modelId);
+            localStorage.setItem('modelSwitchTimestamp', Date.now().toString());
+          }
+          resolve();
+        }),
+        // Cookie update in background
+        saveChatModelAsCookie(modelId).catch(console.warn)
+      ]);
+
+      // Callback after model is ready
       if (onModelChange) {
-        onModelChange(modelId)
+        onModelChange(modelId);
       }
-    })
+    } catch (error) {
+      console.error('Model switch error:', error);
+      // Fallback UI update
+      setOptimisticModelId(modelId);
+      if (onModelChange) {
+        onModelChange(modelId);
+      }
+    }
   }
 
   // Tag checking functions
@@ -131,8 +184,8 @@ export function ModelSelector({
   )
 
   const modelListContent = (
-    <div className={cn("p-2 max-h-[calc(100%-40px)] overflow-y-auto")}>
-      <div className="px-2.5 py-1 text-[12px] font-mono text-muted-foreground uppercase tracking-wider">
+    <div className={cn("p-2 max-h-[calc(100%-40px)] overflow-y-auto rounded-xl")}>
+      <div className="px-2 py-1.5 text-[13px] font-medium text-muted-foreground/80 tracking-wide">
         Available Models
       </div>
       {availableChatModels.map((chatModel) => {
@@ -145,53 +198,34 @@ export function ModelSelector({
             data-testid={`model-selector-item-${id}`}
             onClick={() => handleModelSelect(id)}
             className={cn(
-              "flex items-center gap-2.5 px-1.5 py-3.5 cursor-pointer rounded-md",
-              "hover:bg-accent/20 focus:bg-accent/40 transition-colors",
-              isSelected && "bg-accent/40"
+              "flex items-center text- gap-2.5 px-2 py-2.5 cursor-pointer rounded-lg",
+              "hover:bg-accent/30 focus:bg-accent/40 transition-all duration-200 ease-out",
+              isSelected && "bg-accent/40 shadow-sm"
             )}
           >
-            <div className="flex-shrink-0">
-              {icon ? (
-                <Image
-                  src={icon}
-                  alt={`${name} icon`}
-                  width={20}
-                  height={20}
-                  className="h-5 w-5 rounded-sm"
-                />
-              ) : (
-                <div className="h-5 w-5 rounded-sm bg-muted flex items-center justify-center">
-                  <Brain size={12} className="text-muted-foreground" />
-                </div>
-              )}
-            </div>
+
             <div className="flex flex-col">
-              <span className="text-sm font-medium text-foreground flex items-center gap-2">
+              <span className="text-sm font-apple text-foreground flex items-center gap-2">
                 {name}
                 {/* Reasoning Tag */}
                 {hasReasoningTag(chatModel) && (
-                  <span className="flex border rounded-sm text-xs font-medium bg-gradient-to-r from-red-600 via-pink-500 to-rose-400 text-transparent bg-clip-text sm:px-1.5 sm:pb-0.5 py-px px-1.5">
+                  <span className="flex rounded-sm text-[13px] font-medium bg-gradient-to-r from-red-600 via-pink-500 to-rose-400 text-transparent bg-clip-text">
                     <div>Reasoning</div>
                   </span>
                 )}
                 {/* Coming Tag */}
                 {hasComingTag(chatModel) && (
-                  <span className="flex border rounded-sm text-xs font-medium bg-gradient-to-r from-orange-500 via-yellow-500 to-amber-400 text-transparent bg-clip-text sm:px-1.5 sm:pb-0.5 py-px px-1.5">
+                  <span className="flex rounded-sm text-[13px] font-medium bg-gradient-to-r from-orange-500 via-yellow-500 to-amber-400 text-transparent bg-clip-text">
                     <div>Coming</div>
                   </span>
                 )}
                 {/* New Tag */}
                 {hasNewTag(chatModel) && (
-                  <span className="flex border rounded-sm text-xs font-medium bg-gradient-to-r from-green-600 via-emerald-500 to-teal-400 text-transparent bg-clip-text sm:px-1.5 sm:pb-0.5 py-px px-1.5">
+                  <span className="flex rounded-sm text-[13px] font-medium bg-gradient-to-r from-green-600 via-emerald-500 to-teal-400 text-transparent bg-clip-text">
                     <div>New</div>
                   </span>
                 )}
               </span>
-              {description && (
-                <span className="text-xs text-muted-foreground line-clamp-1">
-                  {description}
-                </span>
-              )}
             </div>
           </div>
         )
@@ -223,8 +257,8 @@ export function ModelSelector({
       <DropdownMenuContent
         align="start"
         className={cn(
-          "max-h-[360px] overflow-y-auto custom-scrollbar p-0 bg-background border border-border shadow-sm scrollbar",
-          "min-w-[200px]"
+          "max-h-[340px] overflow-y-auto custom-scrollbar p-0 bg-background border border-border/10 shadow-lg rounded-xl",
+          "min-w-[260px] backdrop-blur-sm animate-in fade-in-0 zoom-in-95 duration-200"
         )}
       >
         {modelListContent}
