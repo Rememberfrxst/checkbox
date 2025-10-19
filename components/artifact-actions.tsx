@@ -46,7 +46,7 @@ function PureArtifactActions({
   };
 
   return (
-    <div className="flex flex-row gap-1">
+    <div className="flex flex-row gap-2">
       {artifactDefinition.actions.map((action) => (
         <Tooltip key={action.description}>
           <TooltipTrigger asChild>
@@ -54,7 +54,7 @@ function PureArtifactActions({
               variant="outline"
               className={cn('h-fit dark:hover:bg-zinc-700', {
                 'p-2': !action.label,
-                'py-1.5 px-2': action.label,
+                '': action.label,
               })}
               onClick={async () => {
                 setIsLoading(true);
