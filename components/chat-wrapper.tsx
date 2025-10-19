@@ -1,9 +1,8 @@
 'use client';
 
 import { Chat } from '@/components/chat';
-import { useWebSearchState } from '@/hooks/use-web-search-state';
 import type { Session } from 'next-auth';
-import type { UIMessage } from '@/lib/types';
+import type { UIMessage } from 'ai';
 
 interface ChatWrapperProps {
   id: string;
@@ -16,12 +15,9 @@ interface ChatWrapperProps {
 }
 
 export function ChatWrapper(props: ChatWrapperProps) {
-  const webSearchState = useWebSearchState();
-
   return (
     <Chat
       {...props}
-      webSearchState={webSearchState}
     />
   );
 }
