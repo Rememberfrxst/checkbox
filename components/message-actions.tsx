@@ -35,11 +35,11 @@ export function PureMessageActions({
 
   return (
     <TooltipProvider delayDuration={0}>
-      <div className="flex flex-row gap-2">
+      <div className="flex flex-row gap-1">
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
-              className="py-1 px-2 h-fit text-muted-foreground"
+              className="py-1 px-2 h-fit text-formal"
               variant="outline"
               onClick={async () => {
                 const textFromParts = message.parts
@@ -67,7 +67,7 @@ export function PureMessageActions({
           <TooltipTrigger asChild>
             <Button
               data-testid="message-upvote"
-              className="py-1 px-2 h-fit text-muted-foreground !pointer-events-auto"
+              className="py-1 px-2 h-fit text-formal !pointer-events-auto"
               disabled={vote?.isUpvoted}
               variant="outline"
               onClick={async () => {
@@ -120,7 +120,7 @@ export function PureMessageActions({
           <TooltipTrigger asChild>
             <Button
               data-testid="message-downvote"
-              className="py-1 px-2 h-fit text-muted-foreground !pointer-events-auto"
+              className="py-1 px-2 h-fit text-formal !pointer-events-auto"
               variant="outline"
               disabled={vote && !vote.isUpvoted}
               onClick={async () => {
