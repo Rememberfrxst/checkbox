@@ -9,8 +9,11 @@ import { CopyIcon1, PencilHeartIcon, CollapseIcon, ExpandIcon } from "./icons"
 // C/C++-inspired theme styles with dark background (unchanged)
 const codeThemeStylesDark = `
   .hljs {
-    color: #D4D4D4 !important;
-    font-family: Consolas, 'Courier New', monospace !important;
+    color: #fff !important;
+    font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', 'Source Code Pro', Consolas, 'Courier New', monospace !important;
+    font-size: 13px !important;
+    line-height: 1.6 !important;
+    letter-spacing: 0.025em !important;
     background-image: none !important;
     background-attachment: initial !important;
     background-size: initial !important;
@@ -25,16 +28,18 @@ const codeThemeStylesDark = `
   }
   
   /* Keywords - Blue */
-  .hljs-keyword,
-  .hljs-selector-tag,
   .hljs-literal,
   .hljs-doctag,
   .hljs-title,
   .hljs-section,
-  .hljs-name,
   .hljs-strong {
     color: #569CD6 !important;
   }
+
+  .hljs-name,
+  .hljs-selector-tag {
+    color: #e9950c !important;
+    }
   
   /* C/C++ specific keywords - Blue */
   .language-cpp .hljs-keyword,
@@ -81,18 +86,22 @@ const codeThemeStylesDark = `
   .hljs-text {}
   
   /* Numbers and Constants - Light Purple */
-  .hljs-number,
+  
   .hljs-literal,
   .hljs-constant {
     color: #B5CEA8 !important;
   }
   
   /* Preprocessor Directives - Purple */
-  .hljs-meta,
   .hljs-meta-keyword,
   .hljs-preprocessor {
     color: #569CD6 !important;
   }
+
+  .hljs-meta,
+  .hljs-keyword, {
+    color: #ffffff99 !important;
+    }
   
   /* C/C++ specific preprocessor - Purple */
   .language-cpp .hljs-meta,
@@ -105,8 +114,10 @@ const codeThemeStylesDark = `
   /* Variables and Properties - Default Light Gray */
   .hljs-attr,
   .hljs-variable,
+
   .hljs-template-variable,
   .hljs-property,
+  .hljs-number,
   .hljs-attribute {
     color: #df3079 !important;
   }
@@ -118,12 +129,16 @@ const codeThemeStylesDark = `
   }
   
   /* Tags - Blue */
-  .hljs-tag,
+  
   .hljs-selector-id,
   .hljs-selector-class,
   .hljs-selector-attr,
   .hljs-selector-pseudo {
     color: #569CD6 !important;
+  }
+
+  .hljs-tag{
+    color: #fff !important;
   }
   
   /* Parameters - Light Gray */
@@ -132,13 +147,19 @@ const codeThemeStylesDark = `
   }
   
   /* CSS Specific Styles */
-  .language-css .hljs-selector-class,
+
   .language-css .hljs-selector-id {
     color: #569CD6 !important;
   }
+
+    .language-css .hljs-selector-class{
+    color: #f22c3d !important; 
+    }
   
+
+
   .language-css .hljs-attribute {
-    color: #f22c3d !important;
+    color: #df3079 !important;
   }
   
   .language-css .hljs-number {
@@ -166,7 +187,7 @@ const codeThemeStylesDark = `
   .language-bash,
   .language-sh,
   .language-shell {
-    color: ##ffffff0d !important;
+    color: #fff !important;
   }
   
   /* Output/Terminal styling */
@@ -239,25 +260,87 @@ const codeThemeStylesDark = `
   }
 `
 
-// New light mode styles (background white, text colors adjusted for visibility)
+// Complete light mode styles with proper syntax highlighting
 const codeThemeStylesLight = `
   .hljs {
-    color: #1E1E1E !important; /* Darker text for light mode */
-    background: #FFFFFF !important; /* White background */
+    color: #1E1E1E !important;
+    background: transparent !important;
+    font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', 'Source Code Pro', Consolas, 'Courier New', monospace !important;
+    font-size: 14px !important;
+    line-height: 1.6 !important;
+    letter-spacing: 0.025em !important;
   }
   
-  /* Keep all other colors the same as dark mode for "proper" highlighting */
-  /* (You can adjust specific colors here if needed for better contrast in light mode) */
-
-  /* Update scrollbar for light mode */
+  /* Comments - Gray */
+  .hljs-comment,
+  .hljs-quote {
+    color: #6A737D !important;
+    font-style: italic !important;
+  }
+  
+  /* Keywords - Blue */
+  .hljs-keyword,
+  .hljs-selector-tag,
+  .hljs-literal,
+  .hljs-doctag,
+  .hljs-title,
+  .hljs-section,
+  .hljs-name,
+  .hljs-strong {
+    color: #0066CC !important;
+  }
+  
+  /* Types - Purple */
+  .hljs-type,
+  .hljs-class .hljs-title,
+  .hljs-title.class_,
+  .hljs-title.class_.inherited__,
+  .hljs-built_in {
+    color: #7C3AED !important;
+  }
+  
+  /* Functions - Dark Orange */
+  .hljs-function .hljs-title,
+  .hljs-title.function_,
+  .hljs-title.function_.invoke__,
+  .hljs-function,
+  .hljs-function-name {
+    color: #D97706 !important;
+  }
+  
+  /* Strings - Green */
+  .hljs-string,
+  .hljs-meta-string,
+  .hljs-regexp,
+  .hljs-template-string {
+    color: #16A34A !important;
+  }
+  
+  /* Numbers - Purple */
+  .hljs-number,
+  .hljs-literal,
+  .hljs-constant {
+    color: #7C2D12 !important;
+  }
+  
+  /* Variables - Dark Red */
+  .hljs-attr,
+  .hljs-variable,
+  .hljs-template-variable,
+  .hljs-property,
+  .hljs-attribute {
+    color: #DC2626 !important;
+  }
+  
+  /* Output */
+  .hljs-output {
+    color: #059669 !important;
+  }
+  
+  /* Scrollbar for light mode */
   .hljs,
   pre {
     scrollbar-color: #D4D4D4 transparent;
-  }
-
-  /* Ensure output text is visible */
-  .hljs-output {
-    color: #007ACC !important;
   }
 `
 
@@ -283,7 +366,6 @@ export function CodeBlock({
   const { setArtifact } = useArtifact()
   const [isCopied, setIsCopied] = useState(false)
   const [isCollapsed, setIsCollapsed] = useState(false)
-  const [isWrapped, setIsWrapped] = useState(true)
   const [isEditing, setIsEditing] = useState(false)
   const [theme, setTheme] = useState<"dark" | "light">("dark") // Default to dark
 
@@ -388,7 +470,7 @@ export function CodeBlock({
     return (
       <code
         ref={codeRef}
-        className={`${className || "language-plaintext"} inline-block ${theme === "light" ? "bg-white text-black" : "bg-snippet text-white"} px-1 py-0.5 text-[10px] sm:text-xs rounded`}
+        className={`${className || "language-plaintext"} inline-block max-w-full break-words [overflow-wrap:anywhere] bg-snippet px-2 py-1 text-sm rounded`}
         {...props}
       >
         {children}
@@ -397,47 +479,47 @@ export function CodeBlock({
   }
 
   return (
-    <pre className={`code-form w-full sm:max-w-[48rem] mx-auto my-4 contain-inline-size rounded-xl shadow-md overflow-x-auto ${theme === "light" ? "bg-white" : "bg-snippet"}`}>
-      <div className={`flex items-center justify-between rounded-t-xl font-apple px-1.5 py-2.5 sm:px-2 sm:py-2 ${theme === "light" ? "bg-gray-100 text-gray-800" : "bg-gradient-to-r bg-snippet text-gray-200"}`}>
-        <div className="flex items-center mx-2 space-x-2">
-          <span className="text-[12px] sm:text-[12px] font-apple">{language}</span>
+    <pre className={`code-form w-full max-w-full sm:max-w-[48rem] mx-auto my-4 contain-inline-size rounded-2xl shadow-md bg-snippet `}>
+      <div className={`flex items-center justify-between rounded-t-2xl font-apple px-2 bg-snippet`}>
+        <div className="flex items-center mx-1 space-x-2">
+          <span className="text-[11px] sm:text-[12px] font-apple truncate max-w-[120px] sm:max-w-none">{language}</span>
         </div>
-        <div className="flex space-x-1.5 sm:space-x-2.5">
+        <div className="flex space-x-1 sm:space-x-2">
           <button
             onClick={handleCollapse}
-            className={`flex items-center gap-1 rounded px-1 py-0.5 sm:px-1.5 sm:py-0.5 text-[10px] sm:text-[12px] transition-all ${theme === "light" ? "text-gray-800 hover:bg-gray-200" : "text-zinc-200 hover:bg-gray-600/70"}`}
+            className={`flex items-center gap-1 rounded px-2 py-1 sm:px-2 sm:py-1 text-[10px] sm:text-[11px] min-h-[36px] sm:min-h-[32px] transition-all bg-snippet`}
           >
             {isCollapsed ? <ExpandIcon /> : <CollapseIcon />}
-            {isCollapsed ? "Expand" : "Collapse"}
+            <span className="hidden sm:inline">{isCollapsed ? "Expand" : "Collapse"}</span>
           </button>
 
           {!isOutput && (
             <button
               onClick={handleEdit}
-              className={`flex items-center gap-1 rounded px-1 py-0.5 sm:px-1.5 sm:py-0.5 text-[10px] sm:text-[12px] transition-all ${theme === "light" ? "text-gray-800 hover:bg-gray-200" : "text-zinc-200 hover:bg-gray-600/70"}`}
+              className={`flex items-center gap-1 rounded px-2 py-1 sm:px-2 sm:py-1 text-[10px] sm:text-[11px] min-h-[36px] sm:min-h-[32px] transition-all bg-snippet`}
             >
               <PencilHeartIcon />
-              Edit
+              <span className="hidden sm:inline">Edit</span>
             </button>
           )}
 
           <button
             onClick={handleCopy}
-            className={`flex items-center gap-1 rounded px-1 py-0.5 sm:px-1.5 sm:py-0.5 text-[10px] sm:text-[12px] transition-all ${
-              isCopied ? "bg-green-600 text-white" : theme === "light" ? "text-gray-800 hover:bg-gray-200" : "text-gray-200 hover:bg-gray-600/70"
+            className={`flex items-center gap-1 rounded px-2 py-1 sm:px-2 sm:py-1 text-[10px] sm:text-[11px] min-h-[36px] sm:min-h-[32px] transition-all ${
+              isCopied ? "bg-green-600 text-white" : theme === "light" ? "bg-snippet" : "bg-snippet"
             }`}
           >
             <CopyIcon1 />
-            {isCopied ? "Copied!" : "Copy"}
+            <span className="hidden sm:inline">{isCopied ? "Copied!" : "Copy"}</span>
           </button>
         </div>
       </div>
       <div className={isCollapsed ? "hidden" : "block"}>
-        <div className={`w-full overflow-x-auto rounded-b-xl text-base font-inherit px-6 py-2.5 ${theme === "light" ? "bg-white scrollbar-thumb-gray-300" : "bg-snippet scrollbar scrollbar-track-transparent scrollbar-thumb-muted"}`}>
-          <pre className="flex w-full overflow-auto m-auto pb-2.5 leading-tight">
+        <div className={`w-full max-w-full overflow-x-auto rounded-b-2xl text-sm font-inherit p-4 bg-snippet scrollbar scrollbar-track-transparent scrollbar-thumb-muted`}>
+          <pre className="w-full max-w-full min-w-0 leading-relaxed">
             <code
               ref={codeRef}
-              className={`block ${isWrapped ? "whitespace-pre-wrap break-words" : "whitespace-pre"} ${
+              className={`block w-full max-w-full min-w-0 whitespace-pre-wrap break-words max-sm:break-all [overflow-wrap:anywhere] ${
                 isOutput ? (theme === "light" ? "text-black" : "") : ""
               }`}
             >
