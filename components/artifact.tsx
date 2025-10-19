@@ -1,4 +1,5 @@
-import type { Attachment, UIMessage } from 'ai';
+import type { UIMessage } from 'ai';
+import type { Attachment, ChatMessage } from '@/lib/types';
 import { formatDistance } from 'date-fns';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
@@ -33,6 +34,7 @@ import equal from 'fast-deep-equal';
 import type { UseChatHelpers } from '@ai-sdk/react';
 import type { VisibilityType } from './visibility-selector';
 import type { Session } from 'next-auth';
+import { Chat } from './chat';
 
 // Define available artifact types
 export const artifactDefinitions = [
@@ -112,7 +114,7 @@ const ResizableDivider = ({
     <div
       ref={dividerRef}
       className={`
-        absolute top-0 h-full w-1 bg-transparent hover:bg-blue-500/20 
+        absolute top-0 h-full w-1 bg-background hover:bg-blue-500/20 
         cursor-col-resize z-10 transition-colors duration-150
         ${isResizing ? 'bg-blue-500/30' : ''}
       `}
@@ -129,15 +131,14 @@ const ArtifactChatPanel = ({
   chatId,
   input,
   setInput,
-  handleSubmit,
-  reload,
+  regenerate,
   status,
   stop,
-  append, // ✅ Added append prop here
   attachments,
   setAttachments,
   messages,
   setMessages,
+  sendMessage,
   votes,
   isReadonly,
   selectedVisibilityType,
@@ -149,17 +150,16 @@ const ArtifactChatPanel = ({
   chatId: string;
   input: string;
   setInput: Dispatch<SetStateAction<string>>;
-  handleSubmit: UseChatHelpers['handleSubmit'];
-  status: UseChatHelpers['status'];
-  stop: UseChatHelpers['stop'];
-  append: UseChatHelpers['append']; // ✅ Added append type here
+  status: UseChatHelpers<ChatMessage>['status'];
+  stop: UseChatHelpers<ChatMessage>['stop'];
   attachments: Array<Attachment>;
   setAttachments: Dispatch<SetStateAction<Array<Attachment>>>;
   messages: Array<UIMessage>;
-  setMessages: UseChatHelpers['setMessages'];
+  setMessages: UseChatHelpers<ChatMessage>['setMessages'];
+  sendMessage: UseChatHelpers<ChatMessage>["sendMessage"];
   votes: Array<Vote> | undefined;
   isReadonly: boolean;
-  reload: UseChatHelpers['reload'];
+  regenerate: UseChatHelpers<ChatMessage>['regenerate'];
   selectedVisibilityType: VisibilityType;
   session: Session;
   selectedModelId: string;
@@ -188,7 +188,7 @@ const ArtifactChatPanel = ({
             votes={votes}
             messages={messages}
             setMessages={setMessages}
-            reload={reload}
+            regenerate={regenerate}
             isReadonly={isReadonly}
             isArtifactVisible={isArtifactVisible}
           />
@@ -207,10 +207,9 @@ const ArtifactChatPanel = ({
                 chatId={chatId}
                 input={input}
                 setInput={setInput}
-                handleSubmit={handleSubmit}
+                sendMessage={sendMessage}
                 status={status}
                 stop={stop}
-                append={append} // ✅ Passed append prop to MultimodalInput
                 attachments={attachments}
                 setAttachments={setAttachments}
                 messages={messages}
@@ -220,6 +219,7 @@ const ArtifactChatPanel = ({
                 session={session}
                 selectedModelId={selectedModelId}
                 onModelChange={onModelChange}
+                onWebSearch={undefined}
               />
             )}
           </form>
@@ -234,15 +234,14 @@ function PureArtifact({
   chatId,
   input,
   setInput,
-  handleSubmit,
+  sendMessage,
   status,
   stop,
-  append, // ✅ Added append prop to main component
   attachments,
   setAttachments,
   messages,
   setMessages,
-  reload,
+  regenerate,
   votes,
   isReadonly,
   selectedVisibilityType,
@@ -253,15 +252,14 @@ function PureArtifact({
   chatId: string;
   input: string;
   setInput: Dispatch<SetStateAction<string>>;
-  status: UseChatHelpers['status'];
-  stop: UseChatHelpers['stop'];
-  append: UseChatHelpers['append']; // ✅ Added append type to main component
+  status: UseChatHelpers<ChatMessage>['status'];
+  stop: UseChatHelpers<ChatMessage>['stop'];
   attachments: Array<Attachment>;
   setAttachments: Dispatch<SetStateAction<Array<Attachment>>>;
   messages: Array<UIMessage>;
-  setMessages: UseChatHelpers['setMessages'];
-  handleSubmit: UseChatHelpers['handleSubmit'];
-  reload: UseChatHelpers['reload'];
+  setMessages: UseChatHelpers<ChatMessage>['setMessages'];
+  sendMessage: UseChatHelpers<ChatMessage>['sendMessage'];
+  regenerate: UseChatHelpers<ChatMessage>['regenerate'];
   votes: Array<Vote> | undefined;
   isReadonly: boolean;
   selectedVisibilityType: VisibilityType;
@@ -455,7 +453,7 @@ function PureArtifact({
       {artifact.isVisible && (
         <motion.div
           data-testid="artifact"
-          className="flex flex-row h-dvh w-dvw fixed top-0 left-0 z-50 bg-transparent"
+          className="flex flex-row h-dvh w-dvw fixed top-0 left-0 z-50 bg-background dotted-bg"
           initial={{ opacity: 1 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0, transition: { delay: 0.4 } }}
@@ -479,7 +477,7 @@ function PureArtifact({
           {/* Left Panel (Chat Interface) */}
           {!isMobile && (
             <motion.div
-              className="relative bg-background dark:bg-muted h-dvh shrink-0 border-r border-border"
+              className="relative bg-background dark:bg-muted h-dvh shrink-0 border-r border-border shadow-sm"
               style={{ width: leftPanelWidth }}
               initial={{ opacity: 0, x: 10, scale: 1 }}
               animate={{
@@ -487,10 +485,10 @@ function PureArtifact({
                 x: 0,
                 scale: 1,
                 transition: {
-                  delay: 0.2,
+                  delay: 0.1,
                   type: 'spring',
-                  stiffness: 200,
-                  damping: 30,
+                  stiffness: 300,
+                  damping: 25,
                 },
               }}
               exit={{
@@ -516,15 +514,14 @@ function PureArtifact({
                 chatId={chatId}
                 input={input}
                 setInput={setInput}
-                handleSubmit={handleSubmit}
+                sendMessage={sendMessage}
                 status={status}
                 stop={stop}
-                append={append} // ✅ Passed append prop to ArtifactChatPanel
                 attachments={attachments}
                 setAttachments={setAttachments}
                 messages={messages}
                 setMessages={setMessages}
-                reload={reload}
+                regenerate={regenerate}
                 votes={votes}
                 isReadonly={isReadonly}
                 selectedVisibilityType={selectedVisibilityType}
@@ -546,7 +543,7 @@ function PureArtifact({
 
           {/* Right Panel (Artifact Content) */}
           <motion.div
-            className="fixed dark:bg-muted bg-background h-dvh flex flex-col overflow-y-hidden md:border-l dark:border-zinc-700 border-zinc-200"
+            className="fixed bg-background h-dvh flex flex-col overflow-y-hidden md:border-l border-gray-600"
             initial={
               isMobile
                 ? {
@@ -580,7 +577,6 @@ function PureArtifact({
                       type: 'spring',
                       stiffness: 200,
                       damping: 30,
-                      duration: 5000,
                     },
                   }
                 : {
@@ -595,7 +591,6 @@ function PureArtifact({
                       type: 'spring',
                       stiffness: 200,
                       damping: 30,
-                      duration: 5000,
                     },
                   }
             }
@@ -610,80 +605,77 @@ function PureArtifact({
               },
             }}
           >
-            {/* Artifact Header */}
-            <div className="p-2 flex flex-row justify-between items-start border-b border-border">
-              <div className="flex flex-row gap-4 items-start">
+            {/* Artifact Header - Clean and minimal */}
+            <div className="px-4 py-2 flex flex-row justify-between items-center border-b border-[#404040] bg-[#1a1a1a] shrink-0">
+              <div className="flex flex-row gap-3 items-center min-w-0 flex-1">
                 <ArtifactCloseButton />
-
-                <div className="flex flex-col">
-                  <div className="font-medium">{artifact.title}</div>
-
+                <div className="flex flex-col min-w-0 flex-1">
+                  <div className="font-medium text-sm text-white truncate">{artifact.title}</div>
                   {isContentDirty ? (
-                    <div className="text-sm text-muted-foreground">
-                      Saving changes...
+                    <div className="text-xs text-gray-400 flex items-center gap-1">
+                      <div className="w-1 h-1 bg-blue-400 rounded-full animate-pulse"></div>
+                      Saving...
                     </div>
                   ) : document ? (
-                    <div className="text-sm text-muted-foreground">
-                      {`Updated ${formatDistance(
-                        new Date(document.createdAt),
-                        new Date(),
-                        {
-                          addSuffix: true,
-                        },
-                      )}`}
+                    <div className="text-xs text-gray-400">
+                      {`Updated ${formatDistance(new Date(document.createdAt), new Date(), { addSuffix: true })}`}
                     </div>
-                  ) : (
-                    <div className="w-32 h-3 mt-2 bg-muted-foreground/20 rounded-md animate-pulse" />
-                  )}
+                  ) : null}
                 </div>
               </div>
-
-              <ArtifactActions
-                artifact={artifact}
-                currentVersionIndex={currentVersionIndex}
-                handleVersionChange={handleVersionChange}
-                isCurrentVersion={isCurrentVersion}
-                mode={mode}
-                metadata={metadata}
-                setMetadata={setMetadata}
-              />
+              <div className="flex-shrink-0">
+                <ArtifactActions
+                  artifact={artifact}
+                  currentVersionIndex={currentVersionIndex}
+                  handleVersionChange={handleVersionChange}
+                  isCurrentVersion={isCurrentVersion}
+                  mode={mode}
+                  metadata={metadata}
+                  setMetadata={setMetadata}
+                />
+              </div>
             </div>
 
-            {/* Artifact Content */}
-            <div className="dark:bg-muted bg-background h-full overflow-y-scroll !max-w-full items-center">
-              <artifactDefinition.content
-                title={artifact.title}
-                content={
-                  isCurrentVersion
-                    ? artifact.content
-                    : getDocumentContentById(currentVersionIndex)
-                }
-                mode={mode}
-                status={artifact.status}
-                currentVersionIndex={currentVersionIndex}
-                suggestions={[]}
-                onSaveContent={saveContent}
-                isInline={false}
-                isCurrentVersion={isCurrentVersion}
-                getDocumentContentById={getDocumentContentById}
-                isLoading={isDocumentsFetching && !artifact.content}
-                metadata={metadata}
-                setMetadata={setMetadata}
-              />
-
-              <AnimatePresence>
-                {isCurrentVersion && (
-                  <Toolbar
-                    isToolbarVisible={isToolbarVisible}
-                    setIsToolbarVisible={setIsToolbarVisible}
-                    append={append} // ✅ Passed append prop to Toolbar
-                    status={status}
-                    stop={stop}
-                    setMessages={setMessages}
-                    artifactKind={artifact.kind}
+            {/* Artifact Content - Full frame with proper overflow handling */}
+            <div className="bg-background dotted-bg flex-1 flex flex-col">
+              <div className="relative flex-1">
+                {/* Content area - properly contained with overflow handling */}
+                <div className="absolute inset-0">
+                  <artifactDefinition.content
+                    title={artifact.title}
+                    content={
+                      isCurrentVersion
+                        ? artifact.content
+                        : getDocumentContentById(currentVersionIndex)
+                    }
+                    mode={mode}
+                    status={artifact.status}
+                    currentVersionIndex={currentVersionIndex}
+                    suggestions={[]}
+                    onSaveContent={saveContent}
+                    isInline={false}
+                    isCurrentVersion={isCurrentVersion}
+                    getDocumentContentById={getDocumentContentById}
+                    isLoading={isDocumentsFetching && !artifact.content}
+                    metadata={metadata}
+                    setMetadata={setMetadata}
                   />
-                )}
-              </AnimatePresence>
+                </div>
+
+                <AnimatePresence>
+                  {isCurrentVersion && (
+                    <Toolbar
+                     artifactKind={artifact.kind}
+                     isToolbarVisible={isToolbarVisible}
+                     sendMessage={sendMessage}
+                     setIsToolbarVisible={setIsToolbarVisible}
+                     setMessages={setMessages}
+                     status={status}
+                     stop={stop}
+                    />
+                  )}
+                </AnimatePresence>
+              </div>
             </div>
 
             {/* Version Footer */}
