@@ -1,6 +1,5 @@
 import React, { useCallback, useState } from 'react';
 import { Button } from './ui/button';
-import type { UIMessage } from 'ai';
 import { DeepThing } from './icons';
 
 interface ThinkButtonProps {
@@ -14,7 +13,17 @@ const ThinkButton: React.FC<ThinkButtonProps> = ({
   onModelChange, 
   onThinkModeToggle 
 }) => {
-  const [isThinkingMode, setIsThinkingMode] = useState(false);
+  const [isThinkingMode, setIsThinkingMode] = useState(() => {
+    if (typeof window !== 'undefined' && typeof sessionStorage !== 'undefined') {
+      try {
+        return sessionStorage.getItem('thinkingMode') === 'true';
+      } catch (e) {
+        console.warn('sessionStorage read failed in ThinkButton init', e);
+        return false;
+      }
+    }
+    return false;
+  });
 
   const handleThinkClick = useCallback(
     (e: React.MouseEvent<HTMLButtonElement>) => {
@@ -24,22 +33,42 @@ const ThinkButton: React.FC<ThinkButtonProps> = ({
       const newThinkingMode = !isThinkingMode;
       setIsThinkingMode(newThinkingMode);
       
-      // Toggle between reasoning model and current selected model
-      if (newThinkingMode) {
-        // Store current model and switch to reasoning
-        sessionStorage.setItem('previousModel', selectedModelId);
-        onModelChange('chat-model-reasoning');
-      } else {
-        // Restore previous model or default
-        const previousModel = sessionStorage.getItem('previousModel') || 'chat-model';
-        onModelChange(previousModel);
-        sessionStorage.removeItem('previousModel');
-      }
-      
-      // Notify parent component about thinking mode change
-      if (onThinkModeToggle) {
-        onThinkModeToggle(newThinkingMode);
-      }
+      requestAnimationFrame(() => {
+        if (typeof window !== 'undefined' && typeof sessionStorage !== 'undefined') {
+          try {
+            if (newThinkingMode) {
+              sessionStorage.setItem('previousModel', selectedModelId);
+              sessionStorage.setItem('thinkingMode', 'true');
+              onModelChange('chat-model-reasoning');
+            } else {
+              const previousModel = sessionStorage.getItem('previousModel') || 'chat-model';
+              sessionStorage.removeItem('thinkingMode');
+              sessionStorage.removeItem('previousModel');
+              onModelChange(previousModel);
+            }
+          } catch (e) {
+            console.warn('sessionStorage write/read failed in ThinkButton:', e);
+          }
+        } else {
+          // Fallback behavior when sessionStorage not available
+          if (newThinkingMode) {
+            onModelChange('chat-model-reasoning');
+          } else {
+            onModelChange(selectedModelId || 'chat-model');
+          }
+        }
+
+        if (onThinkModeToggle) {
+          onThinkModeToggle(newThinkingMode);
+        }
+      });
+
+      const targetModel = newThinkingMode ? 'chat-model-reasoning' : (typeof sessionStorage !== 'undefined' ? (sessionStorage.getItem('previousModel') || 'chat-model') : 'chat-model');
+      fetch('/api/preload-model', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ modelId: targetModel }),
+      }).catch(() => {});
     },
     [isThinkingMode, selectedModelId, onModelChange, onThinkModeToggle]
   );
@@ -47,10 +76,10 @@ const ThinkButton: React.FC<ThinkButtonProps> = ({
   return (
     <Button
       data-testid="think-button"
-      className={`rounded-full h-fit border transition-all duration-200 flex items-center gap-1 ${
+      className={`rounded-full h-fit border transition-all duration-75 flex items-center gap-1 ${
         isThinkingMode 
-          ? 'bg-purple-100 border-purple-300 text-purple-700 dark:bg-purple-900/30 dark:border-purple-600 dark:text-purple-300' 
-          : 'bg-transparent hover:bg-accent/20'
+          ? 'text-blue-500 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/30' // Light blue background with blue text
+          : 'bg-transparent'
       }`}
       onClick={handleThinkClick}
       aria-label="Toggle Think Mode"
@@ -58,7 +87,7 @@ const ThinkButton: React.FC<ThinkButtonProps> = ({
       size="default"
     >
       <DeepThing />
-      <span>{isThinkingMode ? 'DeepThink ON' : 'DeepThink'}</span>
+      <span>DeepThink</span>
     </Button>
   );
 };
