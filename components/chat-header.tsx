@@ -31,14 +31,14 @@ function PureChatHeader({
   const { width: windowWidth } = useWindowSize();
 
   return (
-    <header className="flex sticky top-0 bg-background py-1.5 items-center px-2 md:px-2 gap-2">
+    <header className="flex sticky top-0 bg-transparent py-1.5 items-center px-2 md:px-2 gap-2">
       <SidebarToggle />
       {(!open || windowWidth < 768) && (
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
               variant="outline"
-              className="order-2 md:order-1 md:px-1.5 px-2 md:h-[32px] ml-auto md:ml-0"
+              className="order-2 md:order-1 md:px-1.5 px-2 md:h-[32px] ml-auto md:ml-0 bg-transparent"
               onClick={() => {
                 router.push('/');
                 router.refresh();
