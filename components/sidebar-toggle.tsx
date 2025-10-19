@@ -22,7 +22,7 @@ export function SidebarToggle({
           data-testid="sidebar-toggle-button"
           onClick={toggleSidebar}
           variant="outline"
-          className="md:px-2 md:h-fit cursor-w-resize"
+          className="md:px-2 md:h-fit cursor-w-resize bg-transparent"
         >
           <SidebarLeftIcon size={22} />
         </Button>
