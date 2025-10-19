@@ -65,6 +65,9 @@ const config = {
             background: 'hsl(var(--user-bubble-background))',
             foreground: 'hsl(var(--user-bubble-foreground))',
         },
+        formal: {
+          DEFAULT: 'hsl(var(--formal-color))',
+        },
         border: 'hsl(var(--border))',
         input: 'hsl(var(--input))',
         ring: 'hsl(var(--ring))',
