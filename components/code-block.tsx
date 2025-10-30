@@ -2,6 +2,7 @@
 
 import type React from "react"
 import { useEffect, useRef, useState } from "react"
+import { useTheme } from "next-themes"
 import hljs from "highlight.js"
 import { useArtifact } from "@/hooks/use-artifact"
 import { CopyIcon1, PencilHeartIcon, CollapseIcon, ExpandIcon } from "./icons"
@@ -362,28 +363,21 @@ export function CodeBlock({
   onEdit,
   ...props
 }: CodeBlockProps) {
-  const codeRef = useRef<HTMLElement>(null)
+  const codeRef = useRef<HTMLElement | null>(null)
+  const gutterRef = useRef<HTMLDivElement | null>(null)
   const { setArtifact } = useArtifact()
   const [isCopied, setIsCopied] = useState(false)
   const [isCollapsed, setIsCollapsed] = useState(false)
+  const [isWrapped, setIsWrapped] = useState(false)
   const [isEditing, setIsEditing] = useState(false)
-  const [theme, setTheme] = useState<"dark" | "light">("dark") // Default to dark
+  const [lines, setLines] = useState<number>(0)
+  const { theme: resolvedTheme } = useTheme()
+  // next-themes can return 'system' - respect that; default to dark
+  const theme = resolvedTheme === "light" ? "light" : "dark"
 
-  // Detect system theme
+  // Inject theme styles based on detected theme (keeps syntax colors from earlier)
   useEffect(() => {
-    const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)")
-    setTheme(mediaQuery.matches ? "dark" : "light")
-
-    const handleChange = (e: MediaQueryListEvent) => {
-      setTheme(e.matches ? "dark" : "light")
-    }
-    mediaQuery.addEventListener("change", handleChange)
-    return () => mediaQuery.removeEventListener("change", handleChange)
-  }, [])
-
-  // Inject theme styles based on detected theme
-  useEffect(() => {
-    const styleId = "cpp-theme"
+    const styleId = "cpp-theme-v2"
     const existingStyle = document.getElementById(styleId)
     if (existingStyle) existingStyle.remove()
 
@@ -391,14 +385,18 @@ export function CodeBlock({
     style.id = styleId
     style.textContent = theme === "dark" ? codeThemeStylesDark : codeThemeStylesLight
     document.head.appendChild(style)
+    return () => {
+      const el = document.getElementById(styleId)
+      if (el) el.remove()
+    }
   }, [theme])
 
-  const isCodeBlock = className.includes("language-") || isOutput
-  const languageMatch = className.match(/language-(\w+)/)
+  const isCodeBlock = (className || "").includes("language-") || isOutput
+  const languageMatch = (className || "").match(/language-(\w+)/)
   const isBashOutput =
-    className.includes("language-bash") ||
-    className.includes("language-sh") ||
-    className.includes("language-shell") ||
+    (className || "").includes("language-bash") ||
+    (className || "").includes("language-sh") ||
+    (className || "").includes("language-shell") ||
     isOutput
 
   const language = isOutput
@@ -406,30 +404,40 @@ export function CodeBlock({
     : languageMatch
       ? languageMatch[1].charAt(0).toUpperCase() + languageMatch[1].slice(1)
       : "Code"
-
   const codeContent = typeof children === "string" ? children : String(children)
 
+  // Highlight and compute lines for the gutter
   useEffect(() => {
-    if (codeRef.current && isCodeBlock) {
-      codeRef.current.className = `${className || "language-plaintext"} hljs`
-      codeRef.current.removeAttribute("data-highlighted")
-      try {
-        if (!className.includes("language-") && !isOutput) {
-          const result = hljs.highlightAuto(codeContent)
-          codeRef.current.innerHTML = result.value
-          codeRef.current.className = `language-${result.language || "plaintext"} hljs`
-        } else if (isOutput) {
-          codeRef.current.className = "hljs-output hljs"
-          codeRef.current.textContent = codeContent
-        } else {
-          hljs.highlightElement(codeRef.current)
-        }
-      } catch (error) {
-        console.error("Highlight.js error:", error)
-        codeRef.current.textContent = codeContent
+    if (!(codeRef.current && isCodeBlock) || isCollapsed) return
+
+    const el = codeRef.current
+    el.className = `${className || "language-plaintext"} hljs`
+    el.removeAttribute("data-highlighted")
+
+    try {
+      if (!className.includes("language-") && !isOutput) {
+        const result = hljs.highlightAuto(codeContent)
+        el.innerHTML = result.value
+        el.className = `language-${result.language || "plaintext"} hljs`
+      } else if (isOutput) {
+        el.className = "hljs-output hljs"
+        el.textContent = codeContent
+      } else {
+        hljs.highlightElement(el)
       }
+    } catch (error) {
+      console.error("Highlight.js error:", error)
+      el.textContent = codeContent
     }
-  }, [children, className, isCodeBlock, isOutput, codeContent])
+
+    // After rendering, compute the number of lines for the gutter
+    // Use textContent to count actual visible lines
+    requestAnimationFrame(() => {
+      const raw = el.textContent ?? codeContent
+      const count = raw.split('\n').length
+      setLines(count)
+    })
+  }, [children, className, isCodeBlock, isOutput, codeContent, isCollapsed])
 
   const handleCopy = async () => {
     const textToCopy = codeRef.current?.textContent || codeContent
@@ -443,6 +451,8 @@ export function CodeBlock({
   }
 
   const handleCollapse = () => setIsCollapsed(!isCollapsed)
+
+  const handleWrap = () => setIsWrapped(!isWrapped)
 
   const handleEdit = () => {
     const codeText = codeRef.current?.textContent || codeContent
@@ -462,6 +472,29 @@ export function CodeBlock({
     })
   }
 
+  // Styles to ensure code blocks are responsive on narrow viewports.
+  // Use `isWrapped` to allow users to toggle wrapping; default keeps pre-like behavior.
+  const preStyles: React.CSSProperties = {
+    margin: 0,
+    maxWidth: '100%',
+    width: '100%',
+    boxSizing: 'border-box',
+    overflowX: 'auto',
+    WebkitOverflowScrolling: 'touch',
+    whiteSpace: isWrapped ? 'pre-wrap' : 'pre',
+     wordBreak: 'break-word',
+     overflowWrap: 'anywhere',
+     hyphens: 'auto',
+  }
+
+  const codeStyles: React.CSSProperties = {
+    display: 'block',
+    whiteSpace: isWrapped ? 'pre-wrap' : 'pre',
+     wordBreak: 'break-word',
+     overflowWrap: 'anywhere',
+     hyphens: 'auto',
+  }
+
   if (!isCodeBlock) {
     return <span>{children}</span>
   }
@@ -469,65 +502,84 @@ export function CodeBlock({
   if (inline) {
     return (
       <code
-        ref={codeRef}
-        className={`${className || "language-plaintext"} inline-block max-w-full break-words [overflow-wrap:anywhere] bg-snippet px-2 py-1 text-sm rounded`}
+        ref={codeRef as any}
+        className={`${className || "language-plaintext"} inline-code rounded px-2 py-0.5 text-sm font-mono bg-snippet-background`}
         {...props}
       >
         {children}
       </code>
     )
+
   }
 
   return (
-    <pre className={`code-form w-full max-w-full sm:max-w-[48rem] mx-auto my-4 contain-inline-size rounded-2xl shadow-md bg-snippet `}>
-      <div className={`flex items-center justify-between rounded-t-2xl font-apple px-2 bg-snippet`}>
-        <div className="flex items-center mx-1 space-x-2">
-          <span className="text-[11px] sm:text-[12px] font-apple truncate max-w-[120px] sm:max-w-none">{language}</span>
+    <div dir="auto" className="not-prose w-full">
+      <div className="relative not-prose @container/code-block [&_div+div]:!mt-0 mt-3 mb-3 @md:-mx-4 @md:-mr-4" data-testid="code-block">
+        {/* Header (no border as requested) */}
+        <div className="flex flex-row px-4 py-2 h-10 items-center rounded-t-xl bg-snippet-header-token border border-snippet-border-token">
+          <span className="font-mono text-xs">{language.toLowerCase()}</span>
         </div>
-        <div className="flex space-x-1 sm:space-x-2">
-          <button
-            onClick={handleCollapse}
-            className={`flex items-center gap-1 rounded px-2 py-1 sm:px-2 sm:py-1 text-[10px] sm:text-[11px] min-h-[36px] sm:min-h-[32px] transition-all bg-snippet`}
-          >
-            {isCollapsed ? <ExpandIcon /> : <CollapseIcon />}
-            <span className="hidden sm:inline">{isCollapsed ? "Expand" : "Collapse"}</span>
-          </button>
 
-          {!isOutput && (
-            <button
-              onClick={handleEdit}
-              className={`flex items-center gap-1 rounded px-2 py-1 sm:px-2 sm:py-1 text-[10px] sm:text-[11px] min-h-[36px] sm:min-h-[32px] transition-all bg-snippet`}
-            >
-              <PencilHeartIcon />
-              <span className="hidden sm:inline">Edit</span>
+        {/* Sticky controls */}
+        <div className="sticky w-full right-2 z-10 @[1280px]/mainview:z-40 @[1280px]/mainview:top-10 top-12 @[0px]/preview:top-5 print:hidden">
+          <div className="absolute bottom-1 right-1 flex flex-row gap-0.5">
+              <div className="flex flex-row gap-0.5" style={{ opacity: 1 }}>
+              <button onClick={handleCollapse} aria-pressed={isCollapsed} className="inline-flex items-center justify-center gap-2 whitespace-nowrap font-medium cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-60 disabled:cursor-not-allowed transition-colors duration-100 [&_svg]:shrink-0 select-none text-fg-secondary hover:text-fg-primary disabled:hover:text-fg-secondary bg-surface-l1 hover:bg-surface-l2 disabled:hover:bg-surface-l1 h-8 rounded-xl px-3 text-xs" type="button">
+                {isCollapsed ? <ExpandIcon /> : <CollapseIcon />}
+                <span className="hidden @sm/code-block:block">{isCollapsed ? 'Expand' : 'Collapse'}</span>
+              </button>
+
+              <button onClick={handleWrap} aria-pressed={isWrapped} className={`inline-flex items-center justify-center gap-2 whitespace-nowrap font-medium cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-60 disabled:cursor-not-allowed transition-colors duration-100 [&_svg]:shrink-0 select-none text-fg-secondary hover:text-fg-primary disabled:hover:text-fg-secondary bg-surface-l1 hover:bg-surface-l2 disabled:hover:bg-surface-l1 h-8 rounded-xl px-3 text-xs ${isWrapped ? 'ring-1 ring-ring' : ''}`} type="button">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-wrap-text size-4"><line x1="3" x2="21" y1="6" y2="6"></line><path d="M3 12h15a3 3 0 1 1 0 6h-4"></path><polyline points="16 16 14 18 16 20"></polyline><line x1="3" x2="10" y1="18" y2="18"></line></svg>
+                <span className="hidden @sm/code-block:block">{isWrapped ? 'Unwrap' : 'Wrap'}</span>
+              </button>
+
+              <button onClick={handleEdit} className="inline-flex items-center justify-center gap-2 whitespace-nowrap font-medium cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-60 disabled:cursor-not-allowed transition-colors duration-100 [&_svg]:shrink-0 select-none text-fg-secondary hover:text-fg-primary disabled:hover:text-fg-secondary bg-surface-l1 hover:bg-surface-l2 disabled:hover:bg-surface-l1 h-8 rounded-xl px-3 text-xs" type="button">
+                <PencilHeartIcon />
+                <span className="hidden @sm/code-block:block">Edit</span>
+              </button>
+            </div>
+
+            <button onClick={handleCopy} aria-pressed={isCopied} aria-live="polite" className="inline-flex items-center justify-center gap-2 whitespace-nowrap font-medium cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-60 disabled:cursor-not-allowed transition-colors duration-100 [&_svg]:shrink-0 select-none text-fg-secondary hover:text-fg-primary disabled:hover:text-fg-secondary bg-surface-l1 hover:bg-surface-l2 disabled:hover:bg-surface-l1 h-8 rounded-xl px-3 text-xs" type="button">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="stroke-[2] size-4"><rect x="3" y="8" width="13" height="13" rx="4" stroke="currentColor"></rect><path fillRule="evenodd" clipRule="evenodd" d="M13 2.00004L12.8842 2.00002C12.0666 1.99982 11.5094 1.99968 11.0246 2.09611C9.92585 2.31466 8.95982 2.88816 8.25008 3.69274C7.90896 4.07944 7.62676 4.51983 7.41722 5.00004H9.76392C10.189 4.52493 10.7628 4.18736 11.4147 4.05768C11.6802 4.00488 12.0228 4.00004 13 4.00004H14.6C15.7366 4.00004 16.5289 4.00081 17.1458 4.05121C17.7509 4.10066 18.0986 4.19283 18.362 4.32702C18.9265 4.61464 19.3854 5.07358 19.673 5.63807C19.8072 5.90142 19.8994 6.24911 19.9488 6.85428C19.9992 7.47112 20 8.26343 20 9.40004V11C20 11.9773 19.9952 12.3199 19.9424 12.5853C19.8127 13.2373 19.4748 13.8114 19 14.2361V16.5829C20.4795 15.9374 21.5804 14.602 21.9039 12.9755C22.0004 12.4907 22.0002 11.9334 22 11.1158L22 11V9.40004V9.35725C22 8.27346 22 7.3993 21.9422 6.69141C21.8826 5.96256 21.7568 5.32238 21.455 4.73008C20.9757 3.78927 20.2108 3.02437 19.27 2.545C18.6777 2.24322 18.0375 2.1174 17.3086 2.05785C16.6007 2.00002 15.7266 2.00003 14.6428 2.00004L14.6 2.00004H13Z" fill="currentColor"></path></svg>
+              <span className="hidden @sm/code-block:block">{isCopied ? 'Copied' : 'Copy'}</span>
             </button>
-          )}
+          </div>
+        </div>
 
-          <button
-            onClick={handleCopy}
-            className={`flex items-center gap-1 rounded px-2 py-1 sm:px-2 sm:py-1 text-[10px] sm:text-[11px] min-h-[36px] sm:min-h-[32px] transition-all ${
-              isCopied ? "bg-green-600 text-white" : theme === "light" ? "bg-snippet" : "bg-snippet"
-            }`}
-          >
-            <CopyIcon1 />
-            <span className="hidden sm:inline">{isCopied ? "Copied!" : "Copy"}</span>
-          </button>
-        </div>
-      </div>
-      <div className={isCollapsed ? "hidden" : "block"}>
-        <div className={`w-full max-w-full overflow-x-auto rounded-b-2xl text-sm font-inherit p-4 bg-snippet scrollbar scrollbar-track-transparent scrollbar-thumb-muted`}>
-          <pre className="w-full max-w-full min-w-0 leading-relaxed">
-            <code
-              ref={codeRef}
-              className={`block w-full max-w-full min-w-0 whitespace-pre-wrap break-words max-sm:break-all [overflow-wrap:anywhere] ${
-                isOutput ? (theme === "light" ? "text-black" : "") : ""
-              }`}
+        {/* Code content area - keep code theme unchanged */}
+        <div className="shiki not-prose relative [&_pre]:overflow-auto bg-snippet-background border border-snippet-border-token [&_pre]:rounded-b-lg [&_pre]:px-4 [&_pre]:py-4 !p-0" style={{ borderRadius: '0px 0px 12px 12px', padding: 16, fontSize: '0.9em', fontFamily: 'var(--font-ibm-plex-mono)', lineHeight: '1.5em', display: 'block', overflow: 'hidden' }}>
+          {isCollapsed ? (
+            <div
+              role="button"
+              tabIndex={0}
+              aria-label={`Collapsed code block, ${lines} hidden lines`}
+              className="w-full bg-snippet-background text-sm text-fg-secondary rounded flex items-start"
+              onClick={handleCollapse}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleCollapse() }}
+              style={{ minHeight: 40, padding: '8px 12px' }}
             >
-              {children}
-            </code>
-          </pre>
+              <div className="text-left">
+                <div className="font-mono text-sm">{lines} hidden line{lines === 1 ? '' : 's'}</div>
+                <div className="text-xs text-fg-muted mt-0.5">Click to expand</div>
+              </div>
+            </div>
+          ) : (
+            <pre className="shiki slack-dark bg-snippet-background" tabIndex={0} style={preStyles}>
+              <code
+                ref={codeRef as any}
+                className={`${className || 'language-plaintext'} hljs`}
+                style={codeStyles}
+              >
+                {children}
+              </code>
+            </pre>
+          )}
         </div>
+
+        <div></div>
+        <div className="false flex flex-col gap-2 h-full"></div>
       </div>
-    </pre>
+    </div>
   )
 }
