@@ -16,14 +16,19 @@ export default async function Layout({
     const [session, cookieStore] = await Promise.all([auth(), cookies()]);
     const isCollapsed = cookieStore.get('sidebar:state')?.value !== 'true';
 
+    // Treat missing session or a user explicitly typed as 'guest' as guest mode.
+    const isGuest = !session || (session && session.user?.type === 'guest');
+
   return (
       <>
         <Script
           src="https://cdn.jsdelivr.net/pyodide/v0.23.4/full/pyodide.js"
           strategy="beforeInteractive"
         />
-        <SidebarProvider defaultOpen={!isCollapsed}>
-          <AppSidebar user={session?.user} />
+        {/* Keep the SidebarProvider so child components that consume the sidebar
+            context don't crash, but don't render the visual Sidebar for guests. */}
+        <SidebarProvider defaultOpen={!isCollapsed && !isGuest}>
+          {!isGuest && <AppSidebar user={session?.user} />}
           <SidebarInset>{children}</SidebarInset>
         </SidebarProvider>
       </>
