@@ -1,17 +1,16 @@
-
 'use client';
 
 import React, { useState, useCallback } from 'react';
-import { Button } from './ui/button';
+import { Button } from './ui/button'; // Although we're building custom UI, we might still use 'Button' for its base styles or props if needed, but here we're replacing its visual structure.
 import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
-import { ImprovePromptIcon } from './icons';
+import { ImprovePromptIcon } from './icons'; // Assuming ImprovePromptIcon is correctly imported
 
 interface ImprovePromptButtonProps {
   input: string;
   onImprovedPrompt: (improvedText: string) => void;
-  status: string;
+  status: string; // 'ready', 'loading', etc.
   className?: string;
 }
 
@@ -24,7 +23,7 @@ export function ImprovePromptButton({
   const [isImproving, setIsImproving] = useState(false);
 
   const improvePrompt = useCallback(async () => {
-    if (!input || !input.trim()) {
+    if (!input.trim()) {
       toast.error('Please enter some text first!');
       return;
     }
@@ -66,26 +65,37 @@ export function ImprovePromptButton({
     }
   }, [input, onImprovedPrompt, status]);
 
-  const isDisabled = !input || !input.trim() || status !== 'ready' || isImproving;
+  const isDisabled = !input.trim() || status !== 'ready' || isImproving;
 
   return (
-    <Button
-      data-testid="improve-prompt-button"
-      className={cn(
-        "rounded-md p-[7px] h-fit dark:border-zinc-700 hover:dark:bg-[#272727] hover:bg-zinc-200 disabled:opacity-50 transition-all duration-200",
-        className
-      )}
-      onClick={improvePrompt}
-      disabled={isDisabled}
-      variant="ghost"
-      title="Improve prompt grammar and clarity"
-    >
-      {isImproving ? (
-        <Loader2 size={22} className="animate-spin" />
-      ) : (
-        <ImprovePromptIcon size={22} />
-      )}
-    </Button>
+    <span className="inline-block" data-state={isImproving ? 'loading' : 'ready'}>
+      <div
+        className={cn(
+          `inline-flex h-9 rounded-full border text-[13px] font-medium text-token-text-secondary border-token-border-default
+          hover:bg-token-main-surface-secondary focus-visible:outline-black dark:focus-visible:outline-white
+          ${isImproving ? 'bg-blue-50 text-blue-500 dark:text-blue-400 dark:bg-blue-950/30' : ''}
+          ${isDisabled ? 'opacity-50 cursor-not-allowed' : ''}
+          `,
+          className // External classNames applied to the outer div
+        )}
+      >
+        <button
+          data-testid="improve-prompt-button"
+          className="flex h-full min-w-8 items-center justify-center p-2"
+          aria-label="Improve prompt"
+          onClick={improvePrompt}
+          disabled={isDisabled}
+          title="Improve prompt grammar and clarity"
+        >
+          {isImproving ? (
+            <Loader2 size={22} className="animate-spin" />
+          ) : (
+            <>
+              <ImprovePromptIcon size={20} />
+            </>
+          )}
+        </button>
+      </div>
+    </span>
   );
 }
-
