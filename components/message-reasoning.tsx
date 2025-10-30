@@ -1,11 +1,12 @@
 
-'use client';
+"use client";
 
 import { useState, useEffect } from 'react';
-import { ChevronDownIcon, DeepThing } from './icons';
+import { ChevronDownIcon, DeepThink2 } from './icons';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Markdown } from './markdown';
 import { useReasoningState } from '@/hooks/use-reasoning-state';
+import ShimmerText from './shimmer';
 
 interface MessageReasoningProps {
   isLoading: boolean;
@@ -31,24 +32,7 @@ export function MessageReasoning({ isLoading, reasoning }: MessageReasoningProps
   return (
     <div className="flex flex-col rounded-lg p-2">
       <style jsx>{`
-        .shine-text-dark {
-          background: linear-gradient(
-            90deg,
-            rgba(156, 163, 175, 0.6) 0%,
-            rgba(156, 163, 175, 0.6) 40%,
-            rgba(255, 255, 255, 0.9) 50%,
-            rgba(156, 163, 175, 0.6) 60%,
-            rgba(156, 163, 175, 0.6) 100%
-          );
-          background-size: 200% 100%;
-          -webkit-background-clip: text;
-          background-clip: text;
-          -webkit-text-fill-color: transparent;
-          animation: smooth-shine 2s linear infinite;
-          font-weight: 500;
-          will-change: background-position;
-        }
-
+        /* keep the dots loader used elsewhere in this component */
         .dots-loader {
           display: inline-flex;
           gap: 2px;
@@ -75,15 +59,6 @@ export function MessageReasoning({ isLoading, reasoning }: MessageReasoningProps
           animation-delay: 0s;
         }
 
-        @keyframes smooth-shine {
-          0% {
-            background-position: 200% 0;
-          }
-          100% {
-            background-position: -200% 0;
-          }
-        }
-
         @keyframes dots-bounce {
           0%, 80%, 100% {
             transform: scale(0.8);
@@ -92,24 +67,6 @@ export function MessageReasoning({ isLoading, reasoning }: MessageReasoningProps
           40% {
             transform: scale(1);
             opacity: 1;
-          }
-        }
-
-        @supports not (-webkit-background-clip: text) {
-          .shine-text-dark {
-            color: rgba(156, 163, 175, 0.8);
-            animation: text-glow 2s ease-in-out infinite;
-          }
-
-          @keyframes text-glow {
-            0%, 100% {
-              opacity: 0.6;
-              text-shadow: 0 0 8px rgba(255, 255, 255, 0.3);
-            }
-            50% {
-              opacity: 1;
-              text-shadow: 0 0 8px rgba(255, 255, 255, 0.3);
-            }
           }
         }
 
@@ -122,9 +79,9 @@ export function MessageReasoning({ isLoading, reasoning }: MessageReasoningProps
       `}</style>
 
       {isThinking ? (
-        <div className="flex flex-row gap-2 w-fit rounded-xl p-1.5 items-center">
-          <DeepThing />
-          <div className="shine-text">Thinkink... {thinkingDuration} {thinkingDuration !== 1 ? 's' : ''}</div>
+        <div className="flex flex-row gap-2 w-fit rounded-xl p-1.5 items-center border">
+          <DeepThink2 />
+          <ShimmerText className="text-[clamp(1rem,4vw,1rem)]">Thinkink... {thinkingDuration} {thinkingDuration !== 1 ? 's' : ''}</ShimmerText>
           <button
             data-testid="message-reasoning-toggle"
             type="button"
@@ -165,7 +122,7 @@ export function MessageReasoning({ isLoading, reasoning }: MessageReasoningProps
             variants={variants}
             transition={{ duration: 0.2, ease: "easeInOut" }}
             style={{ overflow: "hidden" }}
-            className="border-l-2 border-muted-foreground/20 pl-4 mt-3 text-zinc-600 dark:text-zinc-400"
+            className=""
           >
             <Markdown className="space-y-4">{reasoning}</Markdown>
           </motion.div>
