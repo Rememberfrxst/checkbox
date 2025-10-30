@@ -2,8 +2,8 @@ import {
   customProvider,
   extractReasoningMiddleware,
   wrapLanguageModel,
+  type LanguageModelV1,
   generateText,
-  type LanguageModel,
 } from 'ai';
 import { groq } from '@ai-sdk/groq';
 import { google } from '@ai-sdk/google';
@@ -23,70 +23,104 @@ interface ModelConfig {
 }
 
 // Type-safe model creation
-function createOptimizedModel(baseModel: LanguageModel, config: ModelConfig = {}): LanguageModel {
+function createOptimizedModel(baseModel: LanguageModelV1, config: ModelConfig = {}): LanguageModelV1 {
   if (config.reasoning) {
     return wrapLanguageModel({
-      // wrapLanguageModel expects a LanguageModelV2; cast to any to accept string|v2
-      model: baseModel as any,
-      middleware: extractReasoningMiddleware({
-        tagName: config.reasoningTag || 'think',
+      model: baseModel,
+      middleware: extractReasoningMiddleware({ 
+        tagName: config.reasoningTag || 'think' 
       }),
-    }) as unknown as LanguageModel;
+    });
   }
   return baseModel;
 }
 
 // Ultra-fast optimized language models with instant switching
-const productionModels: Record<string, LanguageModel> = {
+const productionModels: Record<string, LanguageModelV1> = {
   // DeepSeek models - ultra performance optimized
-  'chat-model': (deepseek as any)('deepseek-chat', {
-    temperature: 0.7,
+  'chat-model': deepseek('deepseek-chat', {
+    ...( { temperature: 0.7,
     topP: 0.95,
-    maxOutputTokens: 65536, // Increased for long code generation
-  }) as LanguageModel,
+    maxTokens: 65536, // Increased for long code generation
+    streamingEnabled: true,
+    parallelStreaming: true,
+    fastMode: true,
+    cacheEnabled: true, } as any),
+  }),
   'chat-model-reasoning': createOptimizedModel(
-    (deepseek as any)('deepseek-reasoner', {
-      temperature: 0.7,
+    deepseek('deepseek-reasoner', {
+      ...( { temperature: 0.7,
       topP: 0.95,
-      maxOutputTokens: 65536, // Massive context for complex reasoning
+      maxTokens: 65536, // Massive context for complex reasoning
       presencePenalty: 0.1,
       frequencyPenalty: 0.1,
-    }) as LanguageModel,
-    { reasoning: true, reasoningTag: 'think' }
+      streamingEnabled: true,
+      parallelStreaming: true,
+      fastMode: true,
+      cacheEnabled: true,
+      reasoningOptimization: true, } as any),
+    }), 
+    ( { 
+      reasoning: true, 
+      reasoningTag: 'think',
+      persistReasoning: true,
+      reasoningDepth: 'deep',
+      instantSwitch: true,
+      fastReasoning: true,
+    } as any)
   ),
 
-  'chat-model1': (google as any)('models/gemini-2.5-flash', {
-    temperature: 0.7,
-    topP: 0.8,
-    maxOutputTokens: 65536,
-    defaultObjectGenerationMode: 'generic',
-  }) as LanguageModel,
-  'chat-model2': (groq as any)('moonshotai/kimi-k2-instruct', {
-    temperature: 0.8,
-    topP: 0.95,
-    maxOutputTokens: 65536, // Maximum for complex projects
-  }) as LanguageModel,
+'chat-model1': google('models/gemini-2.5-flash', {
+  temperature: 1.0,
+  topP: 1.0,
+  maxOutputTokens: 65536,
+  streamingEnabled: true,
+  parallelStreaming: true,
+  fastMode: true,
+  cacheEnabled: true,
+  instantSwitch: true,
+  defaultObjectGenerationMode: 'generic',
+} as any),  // ✅ Temporary fix agar fir bhi error ho
+
+
+  'chat-model2': groq('moonshotai/kimi-k2-instruct', {
+  ...( { temperature: 0.8,
+  topP: 0.95,
+  maxCompletionTokens: 65536, // Maximum for complex projects
+  streamingEnabled: true,
+  parallelStreaming: true,
+  fastMode: true,
+  cacheEnabled: true,
+  instantSwitch: true, } as any),
+  }),
   'chat-model3': createOptimizedModel(
-    (groq as any)('openai/gpt-oss-120b', {
-      temperature: 0.7,
-      topP: 0.9,
-      maxOutputTokens: 32768, // Large context window
-      presencePenalty: 0.1,
-      frequencyPenalty: 0.1,
-    }) as LanguageModel,
-    { reasoning: true, reasoningTag: 'think' }
+    groq('openai/gpt-oss-120b', {
+  ...( { temperature: 0.7,
+  topP: 0.9,
+  maxTokens: 32768, // Large context window
+  presencePenalty: 0.1,
+  frequencyPenalty: 0.1, } as any),
+    }), 
+    ( { 
+      reasoning: true, 
+      reasoningTag: 'think',
+      instantSwitch: true,
+      fastReasoning: true,
+    } as any)
   ),
-  'title-model': (groq as any)('llama-3.1-8b-instant', {
-    temperature: 0.3,
-    maxOutputTokens: 512, // Sufficient for titles
-  }) as LanguageModel,
-  'artifact-model': (deepseek as any)('deepseek-coder', {
-    temperature: 0.5,
-    maxOutputTokens: 16384, // Large context for code generation
-  }) as LanguageModel,
+  'title-model': groq('llama-3.1-8b-instant', {
+  ...( { temperature: 0.3,
+  maxCompletionTokens: 512, // Sufficient for titles
+  } as any),
+  }),
+  'artifact-model': deepseek('deepseek-coder', {
+  ...( { temperature: 0.5,
+  maxTokens: 16384, // Large context for code generation
+  } as any),
+  }),
 };
 
-const testModels: Record<string, LanguageModel> = {
+const testModels: Record<string, LanguageModelV1> = {
   'chat-model': chatModel,
   'chat-model-reasoning': reasoningModel,
   'title-model': titleModel,
@@ -97,18 +131,18 @@ const testModels: Record<string, LanguageModel> = {
 };
 
 // Model caching and preloading for instant switching
-const modelCache = new Map<string, LanguageModel>();
+const modelCache = new Map<string, LanguageModelV1>();
 const preloadedModels = new Set<string>();
 const modelWarmupQueue = new Set<string>();
 
 // Enhanced preload with priority queue and background warming
-const warmupModel = async (model: LanguageModel, timeoutMs = 1500) => {
+const warmupModel = async (model: LanguageModelV1, timeoutMs = 1500) => {
   try {
     // Fire a tiny generateText to warm up connections with shorter timeout
     const p = generateText({
       model,
       messages: [{ role: 'user', content: '.' }],
-      maxOutputTokens: 1,
+      maxTokens: 1,
       temperature: 0,
     });
 
@@ -175,3 +209,19 @@ export const myProvider = customProvider(({
 
 // Export helpers so other modules (preload route) can trigger cache/warmup
 export { preloadModel, warmupModel };
+
+// Simple model metadata to indicate whether a model supports native tool-calling
+// This is used by the streaming route to select native vs manual tool execution.
+const modelMetadata: Record<string, { toolCallType: 'native' | 'manual' }> = {
+  'chat-model': { toolCallType: 'native' },
+  'chat-model-reasoning': { toolCallType: 'native' },
+  'chat-model1': { toolCallType: 'native' },
+  'chat-model2': { toolCallType: 'native' },
+  'chat-model3': { toolCallType: 'native' },
+  'title-model': { toolCallType: 'manual' },
+  'artifact-model': { toolCallType: 'manual' },
+};
+
+export function getModelMetadata(modelId: string) {
+  return modelMetadata[modelId] ?? { toolCallType: 'manual' };
+}
