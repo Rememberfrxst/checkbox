@@ -1,0 +1,28 @@
+.mmInputShadow {
+  box-shadow: 0 4px 12px rgba(0,0,0,.02), 0 2px 2px rgba(72,104,178,.01), 0 30px 60px rgba(72,104,178,.03);
+}
+
+[data-ds-dark-theme] .mmInputShadow {
+  box-shadow: 0 4px 12px rgba(0,0,0,.1), 0 30px 100px rgba(192,211,255,.08);
+}
+
+/* (empty dark-mode placeholders removed) */
+
+.mmInputShadowHighlight {
+  box-shadow: 0 4px 12px rgba(0,0,0,.02), inset 0px 0px 1px 0px #fff3;
+}
+
+/* Global selectors from user (keep exact class names) */
+:global(._77cefa5._3d616d3), :global(._77cefa5.e0f12fee) {
+  box-shadow: 0 4px 10px rgba(0,0,0,.02), 0 2px 4px rgba(0,0,0,.04);
+}
+
+:global(._77cefa5._9996a53), :global(._77cefa5._974d5d0) {
+  box-shadow: 0 4px 12px rgba(0,0,0,.02), 0 2px 2px rgba(72,104,178,.01), 0 30px 60px rgba(72,104,178,.03);
+}
+
+:global([data-ds-dark-theme] ._77cefa5._9996a53), :global([data-ds-dark-theme] ._77cefa5._974d5d0) {
+  box-shadow: 0 4px 12px rgba(0,0,0,.1), 0 30px 100px rgba(192,211,255,.08);
+}
+
+/* (empty dark-mode placeholders removed) */
