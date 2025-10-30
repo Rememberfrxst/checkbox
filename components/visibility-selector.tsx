@@ -43,6 +43,7 @@ export function VisibilitySelector({
   chatId,
   className,
   selectedVisibilityType,
+  disabled,
 }: {
   chatId: string;
   selectedVisibilityType: VisibilityType;
@@ -64,14 +65,18 @@ export function VisibilitySelector({
       <DropdownMenuTrigger
         asChild
         className={cn(
-          'w-fit data-[state=open]:bg-accent data-[state=open]:text-accent-foreground bg-transparent',
+          'w-fit data-[state=open]:bg-accent data-[state=open]:text-accent-foreground gap-2 bg-transparent',
           className,
         )}
       >
         <Button
           data-testid="visibility-selector"
           variant="outline"
-          className="hidden md:flex md:px-2 p-1 md:h-[32px]"
+          className={cn(
+            'hidden md:flex md:px-2 p-1 md:h-[32px]',
+            disabled ? 'opacity-50 cursor-not-allowed' : '',
+          )}
+          disabled={disabled}
         >
           {selectedVisibility?.icon}
           {selectedVisibility?.label}
@@ -85,6 +90,7 @@ export function VisibilitySelector({
             data-testid={`visibility-selector-item-${visibility.id}`}
             key={visibility.id}
             onSelect={() => {
+              if (disabled) return;
               setVisibilityType(visibility.id);
               setOpen(false);
             }}
