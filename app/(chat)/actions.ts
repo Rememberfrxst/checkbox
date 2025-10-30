@@ -37,25 +37,23 @@ export async function generateTitleFromUserMessage({
   }
 
   // Truncate content if too long
-  const truncatedContent = userContent.length > 200 
-    ? userContent.substring(0, 200) + '...' 
-    : userContent;
-
+  // Use full content without truncation
   try {
     const { text: title } = await generateText({
       model: myProvider.languageModel('title-model'),
-      system: `You generate short, descriptive titles for chat messages. Requirements:
-      - Keep titles under 80 characters
-      - Summarize the main topic
+      system: `You generate descriptive titles for chat messages. Requirements:
+      - Use full descriptive titles without truncation
+      - Maintain the complete context and meaning
       - No quotes or colons
-      - Be specific and clear`,
+      - Be specific and clear
+      - If query is a question, preserve it as is`,
       messages: [
         {
           role: 'user',
-          content: truncatedContent,
+          content: userContent,
         },
       ],
-      maxTokens: 30,
+      maxTokens: 6,
       temperature: 0.3,
     });
 
@@ -63,8 +61,7 @@ export async function generateTitleFromUserMessage({
     const cleanTitle = title
       .trim()
       .replace(/^["']|["']$/g, '') // Remove quotes
-      .replace(/\.$/, '') // Remove trailing period
-      .substring(0, 80); // Ensure max length
+      .replace(/\.$/, ''); // Remove trailing period
 
     return cleanTitle || 'New Chat';
   } catch (error) {
