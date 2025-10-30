@@ -42,11 +42,13 @@ export function ModelSelector({
   selectedModelId,
   onModelChange,
   className,
+  disabled,
 }: {
   session: Session | null
   selectedModelId: string
   onModelChange?: (modelId: string) => void
   className?: string
+  disabled?: boolean
 }) {
   const [open, setOpen] = useState(false)
   const [optimisticModelId, setOptimisticModelId] = useOptimistic(selectedModelId)
@@ -56,7 +58,10 @@ export function ModelSelector({
     if (typeof window !== 'undefined') {
       const savedModel = localStorage.getItem('selectedModel')
       if (savedModel && savedModel !== selectedModelId) {
-        setOptimisticModelId(savedModel)
+        // Wrap optimistic update in a transition to satisfy React concurrent update rules
+        startTransition(() => {
+          setOptimisticModelId(savedModel)
+        })
       }
     }
   }, [])
@@ -122,8 +127,10 @@ export function ModelSelector({
       }
     } catch (error) {
       console.error('Model switch error:', error);
-      // Fallback UI update
-      setOptimisticModelId(modelId);
+      // Fallback UI update: ensure this optimistic update is wrapped in a transition
+      startTransition(() => {
+        setOptimisticModelId(modelId);
+      })
       if (onModelChange) {
         onModelChange(modelId);
       }
@@ -160,10 +167,11 @@ export function ModelSelector({
       data-testid="model-selector"
       variant="ghost"
       className={cn(
-        "w-fit px-1.5 py-4 h-8 text-sm bg-transparent focus:border-disabled",
+        "w-fit px-1.5 py-4 gap-2 h-8 text-sm bg-transparent focus:border-disabled",
         className
       )}
       onMouseDown={(e) => e.preventDefault()}
+      disabled={disabled}
     >
       <div className="flex items-center gap-2">
         {selectedChatModel?.icon && (
@@ -184,7 +192,7 @@ export function ModelSelector({
   )
 
   const modelListContent = (
-    <div className={cn("p-2 max-h-[calc(100%-40px)] overflow-y-auto rounded-xl")}>
+    <div className={cn("p-2 max-h-[calc(100%-40px)] overflow-y-auto rounded-xl divide-y-0")}>
       <div className="px-2 py-1.5 text-[13px] font-medium text-muted-foreground/80 tracking-wide">
         Available Models
       </div>
@@ -240,12 +248,76 @@ export function ModelSelector({
         <SheetContent
           side="bottom"
           style={sheetHeight ? { height: sheetHeight } : undefined}
-          className="overflow-hidden rounded-t-lg p-0"
+          // Larger rounded top corners for mobile and remove internal padding so list can control spacing
+          className={cn(
+            "overflow-hidden rounded-t-3xl p-0",
+            "shadow-model-selector dark:shadow-dark-model-selector" // <-- Shadow added here
+          )}
         >
-          <SheetHeader className="px-4 py-3 border-b border-border/20">
+          {/* Header: keep spacing but remove any border so the list appears seamless */}
+          <SheetHeader className="px-4 py-3 border-none">
             <SheetTitle className="text-sm font-medium">Select Model</SheetTitle>
           </SheetHeader>
-          {modelListContent}
+          {/* Model list: ensure no dividing borders and give items space for icon, name and description */}
+          <div className={cn("p-1 max-h-[calc(100%-40px)] overflow-y-auto rounded-b-3xl bg-secondary-background-token custom-scrollbar")}
+          style={{ height: sheetHeight ? `calc(${sheetHeight} - 52px)` : undefined }}>
+            <div className="px-3 py-2 text-[13px] font-medium text-muted-foreground/80 tracking-wide">
+              Available Models
+            </div>
+            <div className="flex flex-col gap-1 px-2 pb-4">
+              {availableChatModels.map((chatModel) => {
+                const { id, name, icon, description } = chatModel
+                const isSelected = id === optimisticModelId
+
+                return (
+                  <button
+                    key={id}
+                    data-testid={`model-selector-item-${id}`}
+                    onClick={() => handleModelSelect(id)}
+                    className={cn(
+                      "w-full flex items-start gap-3 px-3 py-3 text-left rounded-lg",
+                      "hover:bg-accent/20 focus:bg-accent/30 transition-all duration-150 ease-out",
+                      isSelected && "bg-accent/40 shadow-sm"
+                    )}
+                  >
+                    {icon ? (
+                      <Image src={icon} alt={`${name} icon`} width={36} height={36} className="h-9 w-9 rounded-sm flex-shrink-0" />
+                    ) : (
+                      <div className="h-9 w-9 rounded-sm bg-muted-foreground/10 flex items-center justify-center text-sm text-muted-foreground">?
+                      </div>
+                    )}
+
+                    <div className="flex-1">
+                      <div className="text-sm font-medium text-foreground flex items-center gap-2">
+                        {name}
+                        {hasReasoningTag(chatModel) && (
+                          <span className="text-[12px] font-medium text-pink-500">Reasoning</span>
+                        )}
+                        {hasComingTag(chatModel) && (
+                          <span className="text-[12px] font-medium text-orange-500">Coming</span>
+                        )}
+                        {hasNewTag(chatModel) && (
+                          <span className="text-[12px] font-medium text-green-600">New</span>
+                        )}
+                      </div>
+                      {description && (
+                        <div className="mt-1 text-[13px] text-muted-foreground line-clamp-2">{description}</div>
+                      )}
+                    </div>
+
+                    {/* selection indicator */}
+                    <div className="ml-2 mt-1">
+                      {isSelected ? (
+                        <div className="h-5 w-5 rounded-full bg-primary" />
+                      ) : (
+                        <div className="h-5 w-5 rounded-full border border-snippet-border-token" />
+                      )}
+                    </div>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
         </SheetContent>
       </Sheet>
     )
@@ -257,8 +329,9 @@ export function ModelSelector({
       <DropdownMenuContent
         align="start"
         className={cn(
-          "max-h-[340px] overflow-y-auto custom-scrollbar p-0 bg-background border border-border/10 shadow-lg rounded-xl",
-          "min-w-[260px] backdrop-blur-sm animate-in fade-in-0 zoom-in-95 duration-200"
+          "max-h-[340px] overflow-y-auto custom-scrollbar p-0 bg-secondary-background-token rounded-xl", // Removed shadow-lg
+          "min-w-[260px] backdrop-blur-sm animate-in fade-in-0 zoom-in-95 duration-200",
+          "shadow-model-selector dark:shadow-dark-model-selector" // <-- Shadow added here
         )}
       >
         {modelListContent}
