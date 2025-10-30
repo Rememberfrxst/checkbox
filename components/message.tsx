@@ -19,9 +19,7 @@ import { MessageEditor } from './message-editor';
 import { DocumentPreview } from './document-preview';
 import { MessageReasoning } from './message-reasoning';
 import type { UseChatHelpers } from '@ai-sdk/react';
-import { ChatMessage } from '@/lib/types';
-import { useDataStream } from "./data-stream-provider";
-
+import ShimmerText from './shimmer';
 
 
 const PurePreviewMessage = ({
@@ -30,27 +28,20 @@ const PurePreviewMessage = ({
   vote,
   isLoading,
   setMessages,
-  regenerate,
+  reload,
   isReadonly,
   requiresScrollPadding,
 }: {
   chatId: string;
-  message: ChatMessage;
+  message: UIMessage;
   vote: Vote | undefined;
   isLoading: boolean;
-  setMessages: UseChatHelpers<ChatMessage>['setMessages'];
-  regenerate: UseChatHelpers<ChatMessage>["regenerate"];
+  setMessages: UseChatHelpers['setMessages'];
+  reload: UseChatHelpers['reload'];
   isReadonly: boolean;
   requiresScrollPadding: boolean;
 }) => {
   const [mode, setMode] = useState<'view' | 'edit'>('view');
-
-    const attachmentsFromMessage = message.parts.filter(
-    (part) => part.type === "file"
-  );
-
-
-
   return (
     <AnimatePresence>
       <motion.div
@@ -69,37 +60,23 @@ const PurePreviewMessage = ({
             },
           )}
         >
-                  <div
-          className={cn("flex flex-col", {
-            "gap-2 md:gap-4": message.parts?.some(
-              (p) => p.type === "text" && p.text?.trim()
-            ),
-            "min-h-96": message.role === "assistant" && requiresScrollPadding,
-            "w-full":
-              (message.role === "assistant" &&
-                message.parts?.some(
-                  (p) => p.type === "text" && p.text?.trim()
-                )) ||
-              mode === "edit",
-            "max-w-[calc(100%-2.5rem)] sm:max-w-[min(fit-content,80%)]":
-              message.role === "user" && mode !== "edit",
-          })}
-        >
-          {attachmentsFromMessage.length > 0 && (
-            <div
-              className="flex flex-row justify-end gap-2"
-              data-testid={"message-attachments"}
-            >
-              {attachmentsFromMessage.map((attachment) => (
-                <PreviewAttachment
-                  attachment={{
-                    name: attachment.filename ?? "file",
-                    contentType: attachment.mediaType,
-                    url: attachment.url,
-                  }}
-                  key={attachment.url}
-                />
-                ))}
+          <div
+            className={cn('flex flex-col gap-4 p-1.5 w-full', {
+              'min-h-96': message.role === 'assistant' && requiresScrollPadding,
+            })}
+          >
+            {message.experimental_attachments &&
+              message.experimental_attachments.length > 0 && (
+                <div
+                  data-testid={`message-attachments`}
+                  className="flex flex-row justify-end gap-2"
+                >
+                  {message.experimental_attachments.map((attachment) => (
+                    <PreviewAttachment
+                      key={attachment.url}
+                      attachment={attachment}
+                    />
+                  ))}
                 </div>
               )}
 
@@ -114,7 +91,7 @@ const PurePreviewMessage = ({
                   <MessageReasoning
                     key={key}
                     isLoading={isLoading && index === (message.parts?.length || 1) - 1}
-                    reasoning={part.text}
+                    reasoning={part.reasoning}
                   />
                 );
               }
@@ -168,7 +145,7 @@ const PurePreviewMessage = ({
                         message={message}
                         setMode={setMode}
                         setMessages={setMessages}
-                        regenerate={regenerate}
+                        reload={reload}
                       />
                     </div>
                   );
@@ -279,27 +256,7 @@ export const ThinkingMessage = () => {
 
   return (
     <>
-      <style jsx>{`
-        .loader {
-          width: 24px;
-          height: 24px;
-          border: 4px solid #000000;
-          border-bottom-color: transparent;
-          border-radius: 50%;
-          display: inline-block;
-          box-sizing: border-box;
-          animation: rotation 0.5s linear infinite;
-        }
-
-        @keyframes rotation {
-          0% {
-            transform: rotate(0deg);
-          }
-          100% {
-            transform: rotate(360deg);
-          }
-        }
-      `}</style>
+      {/* shimmer styles moved to shared ShimmerText component */}
       <motion.div
         data-testid="message-assistant-loading"
         className="w-full mx-auto max-w-3xl px-4 group/message min-h-96"
@@ -316,8 +273,8 @@ export const ThinkingMessage = () => {
           )}
         >
           <div className="flex flex-col gap-2 w-full">
-            <div className="flex flex-col gap-4 text-muted-foreground">
-              <span className="loader"></span>
+              <div className="flex flex-col gap-4 text-muted-foreground">
+              <ShimmerText>Searching for web...</ShimmerText>
             </div>
           </div>
         </div>
