@@ -1,84 +1,115 @@
-"use client";
+'use client'
 
-import { useEffect, useRef } from "react";
-import { initialArtifactData, useArtifact } from "@/hooks/use-artifact";
-import { artifactDefinitions } from "./artifact";
-import { useDataStream } from "./data-stream-provider";
+import { useChat } from '@ai-sdk/react'
+import { useEffect, useRef } from 'react'
+import { artifactDefinitions, ArtifactKind } from './artifact'
+import { Suggestion } from '@/lib/db/schema'
+import { initialArtifactData, useArtifact } from '@/hooks/use-artifact'
 
-export function DataStreamHandler() {
-  const { dataStream } = useDataStream();
+export type DataStreamDelta = {
+  type:
+    | 'text-delta'
+    | 'code-delta'
+    | 'sheet-delta'
+    | 'image-delta'
+    | 'title'
+    | 'id'
+    | 'suggestion'
+    | 'clear'
+    | 'finish'
+    | 'kind'
+  content: string | Suggestion
+}
 
-  const { artifact, setArtifact, setMetadata } = useArtifact();
-  const lastProcessedIndex = useRef(-1);
+export function DataStreamHandler({ id }: { id: string }) {
+  const { data: dataStream } = useChat({ id })
+  const { artifact, setArtifact, setMetadata } = useArtifact()
+  const lastProcessedIndex = useRef(-1)
 
   useEffect(() => {
-    if (!dataStream?.length) {
-      return;
-    }
+    if (!dataStream?.length) return
 
-    const newDeltas = dataStream.slice(lastProcessedIndex.current + 1);
-    lastProcessedIndex.current = dataStream.length - 1;
+    const newDeltas = dataStream.slice(lastProcessedIndex.current + 1)
+    lastProcessedIndex.current = dataStream.length - 1
 
-    for (const delta of newDeltas) {
+    for (const delta of newDeltas as DataStreamDelta[]) {
       const artifactDefinition = artifactDefinitions.find(
-        (currentArtifactDefinition) =>
-          currentArtifactDefinition.kind === artifact.kind
-      );
+        (def) => def.kind === artifact.kind
+      )
 
+      // Optional: Allow artifact-specific streaming logic (e.g., image rendering, tables, etc.)
       if (artifactDefinition?.onStreamPart) {
         artifactDefinition.onStreamPart({
           streamPart: delta,
           setArtifact,
-          setMetadata,
-        });
+          setMetadata
+        })
       }
 
+      // Default handling for delta types
       setArtifact((draftArtifact) => {
         if (!draftArtifact) {
-          return { ...initialArtifactData, status: "streaming" };
+          return { ...initialArtifactData, status: 'streaming' }
         }
 
         switch (delta.type) {
-          case "data-id":
+          case 'id':
             return {
               ...draftArtifact,
-              documentId: delta.data,
-              status: "streaming",
-            };
+              documentId: delta.content as string,
+              status: 'streaming'
+            }
 
-          case "data-title":
+          case 'title':
             return {
               ...draftArtifact,
-              title: delta.data,
-              status: "streaming",
-            };
+              title: delta.content as string,
+              status: 'streaming'
+            }
 
-          case "data-kind":
+          case 'kind':
             return {
               ...draftArtifact,
-              kind: delta.data,
-              status: "streaming",
-            };
+              kind: delta.content as ArtifactKind,
+              status: 'streaming'
+            }
 
-          case "data-clear":
+          case 'clear':
             return {
               ...draftArtifact,
-              content: "",
-              status: "streaming",
-            };
+              content: '',
+              status: 'streaming'
+            }
 
-          case "data-finish":
+          case 'text-delta':
+          case 'code-delta':
+          case 'sheet-delta':
+          case 'image-delta':
             return {
               ...draftArtifact,
-              status: "idle",
-            };
+              content: (draftArtifact.content ?? '') + (delta.content as string),
+              status: 'streaming'
+            }
+
+          case 'suggestion':
+            return {
+              ...draftArtifact,
+              suggestion: delta.content as Suggestion,
+              status: 'streaming'
+            }
+
+          case 'finish':
+            return {
+              ...draftArtifact,
+              status: 'idle'
+            }
 
           default:
-            return draftArtifact;
+            return draftArtifact
         }
-      });
+      })
     }
-  }, [dataStream, setArtifact, setMetadata, artifact]);
+  }, [dataStream, setArtifact, setMetadata, artifact])
 
-  return null;
+  return null
 }
