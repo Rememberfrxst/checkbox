@@ -1,5 +1,4 @@
-import type { UIMessage } from 'ai';
-import type { Attachment, ChatMessage } from '@/lib/types';
+import type { Attachment, UIMessage } from 'ai';
 import { formatDistance } from 'date-fns';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
@@ -86,7 +85,7 @@ const ResizableDivider = ({
       if (!isResizing) return;
       
       // Constrain width between 300px and 800px
-      const newWidth = Math.max(300, Math.min(800, e.clientX));
+      const newWidth = Math.max(400, Math.min(900, e.clientX));
       onResize(newWidth);
     };
 
@@ -114,11 +113,11 @@ const ResizableDivider = ({
     <div
       ref={dividerRef}
       className={`
-        absolute top-0 h-full w-1 bg-background hover:bg-blue-500/20 
+        absolute top-0 h-full w-1 bg-background 
         cursor-col-resize z-10 transition-colors duration-150
-        ${isResizing ? 'bg-blue-500/30' : ''}
+        ${isResizing ? '' : ''}
       `}
-      style={{ left: leftPanelWidth - 2 }}
+      style={{ left: leftPanelWidth - 1 }}
       onMouseDown={handleMouseDown}
     >
       <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-1 h-8 bg-gray-400 rounded-full opacity-0 hover:opacity-100 transition-opacity" />
@@ -131,14 +130,15 @@ const ArtifactChatPanel = ({
   chatId,
   input,
   setInput,
-  regenerate,
+  handleSubmit,
+  reload,
   status,
   stop,
+  append, // ✅ Added append prop here
   attachments,
   setAttachments,
   messages,
   setMessages,
-  sendMessage,
   votes,
   isReadonly,
   selectedVisibilityType,
@@ -150,16 +150,17 @@ const ArtifactChatPanel = ({
   chatId: string;
   input: string;
   setInput: Dispatch<SetStateAction<string>>;
-  status: UseChatHelpers<ChatMessage>['status'];
-  stop: UseChatHelpers<ChatMessage>['stop'];
+  handleSubmit: UseChatHelpers['handleSubmit'];
+  status: UseChatHelpers['status'];
+  stop: UseChatHelpers['stop'];
+  append: UseChatHelpers['append']; // ✅ Added append type here
   attachments: Array<Attachment>;
   setAttachments: Dispatch<SetStateAction<Array<Attachment>>>;
   messages: Array<UIMessage>;
-  setMessages: UseChatHelpers<ChatMessage>['setMessages'];
-  sendMessage: UseChatHelpers<ChatMessage>["sendMessage"];
+  setMessages: UseChatHelpers['setMessages'];
   votes: Array<Vote> | undefined;
   isReadonly: boolean;
-  regenerate: UseChatHelpers<ChatMessage>['regenerate'];
+  reload: UseChatHelpers['reload'];
   selectedVisibilityType: VisibilityType;
   session: Session;
   selectedModelId: string;
@@ -188,7 +189,7 @@ const ArtifactChatPanel = ({
             votes={votes}
             messages={messages}
             setMessages={setMessages}
-            regenerate={regenerate}
+            reload={reload}
             isReadonly={isReadonly}
             isArtifactVisible={isArtifactVisible}
           />
@@ -200,16 +201,17 @@ const ArtifactChatPanel = ({
       
       {/* Input Area */}
       <div className="shrink-0">
-        <div className="p-4">
+        <div className="flex mx-4 mb-4">
           <form className="flex gap-2 w-full">
             {!isReadonly && (
               <MultimodalInput
                 chatId={chatId}
                 input={input}
                 setInput={setInput}
-                sendMessage={sendMessage}
+                handleSubmit={handleSubmit}
                 status={status}
                 stop={stop}
+                append={append} // ✅ Passed append prop to MultimodalInput
                 attachments={attachments}
                 setAttachments={setAttachments}
                 messages={messages}
@@ -234,14 +236,15 @@ function PureArtifact({
   chatId,
   input,
   setInput,
-  sendMessage,
+  handleSubmit,
   status,
   stop,
+  append, // ✅ Added append prop to main component
   attachments,
   setAttachments,
   messages,
   setMessages,
-  regenerate,
+  reload,
   votes,
   isReadonly,
   selectedVisibilityType,
@@ -252,14 +255,15 @@ function PureArtifact({
   chatId: string;
   input: string;
   setInput: Dispatch<SetStateAction<string>>;
-  status: UseChatHelpers<ChatMessage>['status'];
-  stop: UseChatHelpers<ChatMessage>['stop'];
+  status: UseChatHelpers['status'];
+  stop: UseChatHelpers['stop'];
+  append: UseChatHelpers['append']; // ✅ Added append type to main component
   attachments: Array<Attachment>;
   setAttachments: Dispatch<SetStateAction<Array<Attachment>>>;
   messages: Array<UIMessage>;
-  setMessages: UseChatHelpers<ChatMessage>['setMessages'];
-  sendMessage: UseChatHelpers<ChatMessage>['sendMessage'];
-  regenerate: UseChatHelpers<ChatMessage>['regenerate'];
+  setMessages: UseChatHelpers['setMessages'];
+  handleSubmit: UseChatHelpers['handleSubmit'];
+  reload: UseChatHelpers['reload'];
   votes: Array<Vote> | undefined;
   isReadonly: boolean;
   selectedVisibilityType: VisibilityType;
@@ -453,7 +457,7 @@ function PureArtifact({
       {artifact.isVisible && (
         <motion.div
           data-testid="artifact"
-          className="flex flex-row h-dvh w-dvw fixed top-0 left-0 z-50 bg-background dotted-bg"
+          className="flex flex-row h-dvh w-dvw fixed top-0 left-0 z-50 bg-background"
           initial={{ opacity: 1 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0, transition: { delay: 0.4 } }}
@@ -514,14 +518,15 @@ function PureArtifact({
                 chatId={chatId}
                 input={input}
                 setInput={setInput}
-                sendMessage={sendMessage}
+                handleSubmit={handleSubmit}
                 status={status}
                 stop={stop}
+                append={append} // ✅ Passed append prop to ArtifactChatPanel
                 attachments={attachments}
                 setAttachments={setAttachments}
                 messages={messages}
                 setMessages={setMessages}
-                regenerate={regenerate}
+                reload={reload}
                 votes={votes}
                 isReadonly={isReadonly}
                 selectedVisibilityType={selectedVisibilityType}
@@ -637,7 +642,7 @@ function PureArtifact({
             </div>
 
             {/* Artifact Content - Full frame with proper overflow handling */}
-            <div className="bg-background dotted-bg flex-1 flex flex-col">
+            <div className="bg-background flex-1 flex flex-col">
               <div className="relative flex-1">
                 {/* Content area - properly contained with overflow handling */}
                 <div className="absolute inset-0">
@@ -665,13 +670,13 @@ function PureArtifact({
                 <AnimatePresence>
                   {isCurrentVersion && (
                     <Toolbar
-                     artifactKind={artifact.kind}
-                     isToolbarVisible={isToolbarVisible}
-                     sendMessage={sendMessage}
-                     setIsToolbarVisible={setIsToolbarVisible}
-                     setMessages={setMessages}
-                     status={status}
-                     stop={stop}
+                      isToolbarVisible={isToolbarVisible}
+                      setIsToolbarVisible={setIsToolbarVisible}
+                      append={append}
+                      status={status}
+                      stop={stop}
+                      setMessages={setMessages}
+                      artifactKind={artifact.kind}
                     />
                   )}
                 </AnimatePresence>
