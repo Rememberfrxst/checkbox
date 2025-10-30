@@ -16,11 +16,12 @@ export function SubmitButton({
   const { pending } = useFormStatus();
 
   return (
+    <div className="flex py-6">
     <Button
       type={pending ? 'button' : 'submit'}
       aria-disabled={pending || isSuccessful}
       disabled={pending || isSuccessful}
-      className="relative"
+      className="relative w-full rounded-full text-[1rem] h-[3.25rem]"
     >
       {children}
 
@@ -34,5 +35,6 @@ export function SubmitButton({
         {pending || isSuccessful ? 'Loading' : 'Submit form'}
       </output>
     </Button>
+    </div>
   );
 }
