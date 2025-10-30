@@ -7,15 +7,14 @@ import type { UIArtifact } from './artifact';
 import type { UseChatHelpers } from '@ai-sdk/react';
 import { motion } from 'framer-motion';
 import { useMessages } from '@/hooks/use-messages';
-import type { ChatMessage } from "@/lib/types";
 
 interface ArtifactMessagesProps {
   chatId: string;
-  status: UseChatHelpers<ChatMessage>['status'];
+  status: UseChatHelpers['status'];
   votes: Array<Vote> | undefined;
   messages: Array<UIMessage>;
-  setMessages: UseChatHelpers<ChatMessage>['setMessages'];
-  regenerate: UseChatHelpers<ChatMessage>["regenerate"];
+  setMessages: UseChatHelpers['setMessages'];
+  reload: UseChatHelpers['reload'];
   isReadonly: boolean;
   artifactStatus: UIArtifact['status'];
 }
@@ -26,7 +25,7 @@ function PureArtifactMessages({
   votes,
   messages,
   setMessages,
-  regenerate,
+  reload,
   isReadonly,
 }: ArtifactMessagesProps) {
   const {
@@ -57,7 +56,7 @@ function PureArtifactMessages({
               : undefined
           }
           setMessages={setMessages}
-          regenerate={regenerate}
+          reload={reload}
           isReadonly={isReadonly}
           requiresScrollPadding={
             hasSentMessage && index === messages.length - 1
