@@ -12,7 +12,8 @@ import { Button } from './ui/button';
 
 export function SidebarToggle({
   className,
-}: ComponentProps<typeof SidebarTrigger>) {
+  disabled,
+}: ComponentProps<typeof SidebarTrigger> & { disabled?: boolean }) {
   const { toggleSidebar } = useSidebar();
 
   return (
@@ -20,14 +21,16 @@ export function SidebarToggle({
       <TooltipTrigger asChild>
         <Button
           data-testid="sidebar-toggle-button"
-          onClick={toggleSidebar}
+          onClick={!disabled ? toggleSidebar : undefined}
           variant="outline"
-          className="md:px-2 md:h-fit cursor-w-resize bg-transparent"
+          disabled={disabled}
+          className={`md:px-2 md:h-fit bg-transparent ${
+            disabled ? 'cursor-not-allowed' : 'cursor-w-resize'
+          }`}
         >
-          <SidebarLeftIcon size={22} />
+          <SidebarLeftIcon size={20} />
         </Button>
       </TooltipTrigger>
-      <TooltipContent align="start">Toggle Sidebar</TooltipContent>
     </Tooltip>
   );
 }
