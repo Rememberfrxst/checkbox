@@ -6,15 +6,14 @@ import equal from 'fast-deep-equal';
 import type { UseChatHelpers } from '@ai-sdk/react';
 import { motion } from 'framer-motion';
 import { useMessages } from '@/hooks/use-messages';
-import { ChatMessage } from '@/lib/types';
 
 interface MessagesProps {
   chatId: string;
-  status: UseChatHelpers<ChatMessage>['status'];
+  status: UseChatHelpers['status'];
   votes: Array<Vote> | undefined;
   messages: Array<UIMessage>;
-  setMessages: UseChatHelpers<ChatMessage>['setMessages'];
-  regenerate: UseChatHelpers<ChatMessage>["regenerate"];
+  setMessages: UseChatHelpers['setMessages'];
+  reload: UseChatHelpers['reload'];
   isReadonly: boolean;
   isArtifactVisible: boolean;
 }
@@ -25,7 +24,7 @@ function PureMessages({
   votes,
   messages,
   setMessages,
-  regenerate,
+  reload,
   isReadonly,
 }: MessagesProps) {
   const {
@@ -42,7 +41,7 @@ function PureMessages({
   return (
     <div
       ref={messagesContainerRef}
-      className="flex flex-col min-w-0 gap-6 flex-1 overflow-y-scroll pt-4 relative scrollbar scrollbar-track-transparent scrollbar-thumb-current"
+      className="flex flex-col min-w-0 gap-6 flex-1 overflow-y-scroll pt-4 relative scrollbar scrollbar-track-transparent scrollbar-thumb-bubblescrollbar"
     >
 
       {messages.map((message, index) => (
@@ -57,7 +56,7 @@ function PureMessages({
               : undefined
           }
           setMessages={setMessages}
-          regenerate={regenerate}
+          reload={reload}
           isReadonly={isReadonly}
           requiresScrollPadding={
             hasSentMessage && index === messages.length - 1
