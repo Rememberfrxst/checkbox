@@ -21,8 +21,7 @@ export default function SpeechButton({ onStart, onStop }: { onStart?: () => void
     <Button
       data-testid="composer-speech-button"
       aria-label={isActive ? 'Stop voice mode' : 'Start voice mode'}
-      className="relative flex h-9 w-9 items-center justify-center rounded-full"
-      style={{ backgroundColor: '#ececec', color: '#424242' }}
+      className="relative flex h-9 w-9 items-center justify-center rounded-full bg-theme-secondary-btn-bg"
       onClick={handleClick}
       variant="ghost"
     >
