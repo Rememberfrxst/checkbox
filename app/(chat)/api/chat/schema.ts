@@ -1,28 +1,23 @@
-import { z } from "zod";
+import { z } from 'zod';
 
 const textPartSchema = z.object({
-  type: z.enum(["text"]),
   text: z.string().min(1).max(2000),
+  type: z.enum(['text']),
 });
-
-const filePartSchema = z.object({
-  type: z.enum(["file"]),
-  mediaType: z.enum(["image/jpeg", "image/png"]),
-  name: z.string().min(1).max(100),
-  url: z.string().url(),
-});
-
-const partSchema = z.union([textPartSchema, filePartSchema]);
 
 export const postRequestBodySchema = z.object({
-  id: z.string().uuid(),
+  id: z.string(),
   message: z.object({
-    id: z.string().uuid(),
-    role: z.enum(["user"]),
-    parts: z.array(partSchema),
+    id: z.string(),
+    role: z.literal('user'),
+    parts: z.array(z.object({
+      type: z.literal('text'),
+      text: z.string(), // Removed size limit to handle large inputs
+    })),
+    experimental_attachments: z.array(z.any()).optional(),
   }),
-  selectedChatModel: z.enum(["chat-model", "chat-model-reasoning"]),
-  selectedVisibilityType: z.enum(["public", "private"]),
+  selectedChatModel: z.string(),
+  selectedVisibilityType: z.enum(['public', 'private']),
 });
 
 export type PostRequestBody = z.infer<typeof postRequestBodySchema>;
